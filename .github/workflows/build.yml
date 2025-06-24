@@ -175,127 +175,117 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-single:
-    runs-on: ${{ matrix.os }}
+  build-single-windows:
+    if: github.event.inputs.platform == 'windows'
+    runs-on: windows-latest
     timeout-minutes: 60
-    if: github.event.inputs.platform != 'all'
-    strategy:
-      matrix:
-        os: ${{ github.event.inputs.platform == 'windows' && 'windows-latest' || github.event.inputs.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
-        platform: ${{ github.event.inputs.platform }}
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-
-    - name: Install dependencies (Windows)
-      if: matrix.platform == 'windows'
-      shell: pwsh
-      run: npm ci
-
-    - name: Install dependencies (Unix)
-      if: matrix.platform != 'windows'
-      run: npm ci
-
-    - name: Clear caches and verify configuration
-      run: |
-        echo "Clearing any potential caches..."
-        rm -rf node_modules/.cache || true
-        rm -rf .electron-builder || true
-        echo "Verifying package.json configuration..."
-        node -e "
-          const pkg = JSON.parse(require('fs').readFileSync('package.json', 'utf8'));
-          const invalidProps = Object.keys(pkg.build || {}).filter(key => key.startsWith('mac-'));
-          if (invalidProps.length > 0) {
-            console.error('Invalid properties found:', invalidProps);
-            process.exit(1);
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - name: Install dependencies
+        shell: pwsh
+        run: npm ci
+      - name: Setup icons for build (Windows)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "assets/icon.ico")) {
+            Write-Host "Creating placeholder Windows icon..."
+            Copy-Item "assets/icon.png" "assets/icon.ico"
           }
-          console.log('✅ No invalid properties found in package.json');
-        "
-        echo "Current package.json build configuration:"
-        node -e "
-          const pkg = JSON.parse(require('fs').readFileSync('package.json', 'utf8'));
-          console.log(JSON.stringify(pkg.build, null, 2));
-        "
+      - name: Build application (Windows)
+        shell: pwsh
+        run: |
+          Write-Host "Building for Windows..."
+          Write-Host "Current directory: $(Get-Location)"
+          Write-Host "Node version: $(node --version)"
+          Write-Host "NPM version: $(npm --version)"
+          Write-Host "Running: npm run build:win"
+          npm run build:win
+          Write-Host "Build completed successfully!"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: dist/
+          retention-days: 30
 
-    - name: Setup Linux dependencies
-      if: matrix.platform == 'linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+  build-single-macos:
+    if: github.event.inputs.platform == 'macos'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Setup icons for build (macOS)
+        run: |
+          if [ ! -f "assets/icon.png" ]; then
+            echo "Missing icon.png!"
+            exit 1
+          fi
+      - name: Build application (macOS)
+        run: |
+          echo "Building for macOS..."
+          echo "Current directory: $(pwd)"
+          echo "Node version: $(node --version)"
+          echo "NPM version: $(npm --version)"
+          echo "Running: npm run build:mac"
+          npm run build:mac
+          echo "Build completed successfully!"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: dist/
+          retention-days: 30
 
-    - name: Setup icons for build (Windows)
-      if: matrix.platform == 'windows'
-      shell: pwsh
-      run: |
-        if (-not (Test-Path "assets/icon.ico")) {
-          Write-Host "Creating placeholder Windows icon..."
-          Copy-Item "assets/icon.png" "assets/icon.ico"
-        }
-
-    - name: Setup icons for build (macOS)
-      if: matrix.platform == 'macos'
-      run: |
-        if [ ! -f "assets/icon.icns" ]; then
-          echo "Creating placeholder macOS icon..."
-          mkdir -p assets/icon.iconset
-          sips -z 16 16 assets/icon.png --out assets/icon.iconset/icon_16x16.png
-          sips -z 32 32 assets/icon.png --out assets/icon.iconset/icon_16x16@2x.png
-          sips -z 32 32 assets/icon.png --out assets/icon.iconset/icon_32x32.png
-          sips -z 64 64 assets/icon.png --out assets/icon.iconset/icon_32x32@2x.png
-          sips -z 128 128 assets/icon.png --out assets/icon.iconset/icon_128x128.png
-          sips -z 256 256 assets/icon.png --out assets/icon.iconset/icon_128x128@2x.png
-          sips -z 256 256 assets/icon.png --out assets/icon.iconset/icon_256x256.png
-          sips -z 512 512 assets/icon.png --out assets/icon.iconset/icon_256x256@2x.png
-          sips -z 512 512 assets/icon.png --out assets/icon.iconset/icon_512x512.png
-          sips -z 1024 1024 assets/icon.png --out assets/icon.iconset/icon_512x512@2x.png
-          iconutil -c icns assets/icon.iconset -o assets/icon.icns
-        fi
-
-    - name: Setup icons for build (Linux)
-      if: matrix.platform == 'linux'
-      run: |
-        echo "Linux build - using PNG icon directly"
-
-    - name: Build application (Windows)
-      if: matrix.platform == 'windows'
-      shell: pwsh
-      run: |
-        Write-Host "Building for Windows (single platform)..."
-        Write-Host "Current directory: $(Get-Location)"
-        Write-Host "Node version: $(node --version)"
-        Write-Host "NPM version: $(npm --version)"
-        Write-Host "Running: npm run build:win"
-        npm run build:win
-        Write-Host "Build completed successfully!"
-
-    - name: Build application (macOS)
-      if: matrix.platform == 'macos'
-      run: |
-        echo "Building for macOS (single platform)..."
-        echo "Current directory: $(pwd)"
-        echo "Node version: $(node --version)"
-        echo "NPM version: $(npm --version)"
-        echo "Running: npm run build:mac"
-        npm run build:mac
-        echo "Build completed successfully!"
-
-    - name: Build application (Linux)
-      if: matrix.platform == 'linux'
-      run: |
-        npm run build:linux
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ matrix.platform }}-build
-        path: dist/
-        retention-days: 30 
+  build-single-linux:
+    if: github.event.inputs.platform == 'linux'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Setup Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Build application (Linux)
+        run: |
+          echo "Building for Linux..."
+          echo "Current directory: $(pwd)"
+          echo "Node version: $(node --version)"
+          echo "NPM version: $(npm --version)"
+          echo "Running: npm run build:linux"
+          npm run build:linux
+          echo "Build completed successfully!"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: dist/
+          retention-days: 30 
