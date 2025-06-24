@@ -198,7 +198,15 @@ function setupEventListeners() {
     
     // Fixed Key Vault search - ensure the input exists and add proper event listener
     if (keyvaultSearchInput) {
-        keyvaultSearchInput.addEventListener('input', handleKeyVaultSearch);
+        console.log('Key Vault search input found, setting up event listener');
+        keyvaultSearchInput.addEventListener('input', (e) => {
+            console.log('Key Vault search input event triggered:', e.target.value);
+            handleKeyVaultSearch();
+        });
+        keyvaultSearchInput.addEventListener('keyup', (e) => {
+            console.log('Key Vault search keyup event triggered:', e.target.value);
+            handleKeyVaultSearch();
+        });
         addLogEntry('Key Vault search input found and configured', 'success');
     } else {
         console.error('Key Vault search input not found');
@@ -270,93 +278,79 @@ async function loadAllKeyVaults() {
     allSecretsByVault.clear();
     allKeysByVault.clear();
     loadedVaults.clear();
-    searchCache.clear();
+    filteredKeyVaults = []; // Reset filtered vaults
     currentVaultPage = 1;
     
     try {
-        loadingProgress.updateMessage('Creating Azure credentials...');
-        addLogEntry('Creating Azure credentials', 'info');
+        loadingProgress.updateMessage('Authenticating with Azure...');
         const credential = new DefaultAzureCredential();
         
-        loadingProgress.updateMessage('Connecting to Azure subscriptions...');
-        addLogEntry('Connecting to Azure subscriptions', 'info');
+        loadingProgress.updateMessage('Loading subscriptions...');
         const subscriptionClient = new SubscriptionClient(credential);
-        
-        loadingProgress.updateMessage('Fetching subscriptions...');
-        addLogEntry('Fetching subscriptions from Azure', 'info');
-        
         const subscriptions = [];
-        for await (const sub of subscriptionClient.subscriptions.list()) {
-            subscriptions.push(sub);
-            addLogEntry(`Found subscription: ${sub.displayName} (${sub.subscriptionId})`, 'success');
+        
+        for await (const subscription of subscriptionClient.subscriptions.list()) {
+            subscriptions.push(subscription);
         }
         
-        addLogEntry(`Total subscriptions found: ${subscriptions.length}`, 'info');
+        loadingProgress.updateMessage(`Found ${subscriptions.length} subscriptions, loading Key Vaults...`);
+        addLogEntry(`Found ${subscriptions.length} subscriptions`, 'info');
         
-        if (subscriptions.length === 0) {
-            addLogEntry('No subscriptions found. Please check your Azure account and permissions.', 'error');
-            showError(keyvaultList, 'No subscriptions found. Please check your Azure account and permissions.');
-            loadingProgress.complete();
-            return;
-        }
+        let totalVaults = 0;
+        let loadedVaults = 0;
         
-        loadingProgress.updateMessage('Discovering Key Vaults across subscriptions...');
-        addLogEntry('Starting Key Vault discovery across all subscriptions', 'info');
-        
-        // Load Key Vaults in parallel for better performance
-        const vaultPromises = subscriptions.map(async (sub, index) => {
+        // Load vaults from all subscriptions
+        for (const subscription of subscriptions) {
             try {
-                loadingProgress.updateProgress(
-                    (index / subscriptions.length) * 50, 
-                    `Checking subscription: ${sub.displayName}`
-                );
-                
-                const kvClient = new KeyVaultManagementClient(credential, sub.subscriptionId);
+                const keyVaultClient = new KeyVaultManagementClient(credential, subscription.subscriptionId);
                 const vaults = [];
                 
-                for await (const vault of kvClient.vaults.list()) {
+                for await (const vault of keyVaultClient.vaults.list()) {
                     vaults.push({
-                        id: vault.id,
                         name: vault.name,
                         location: vault.location,
-                        resourceGroup: vault.resourceGroup,
-                        subscriptionId: sub.subscriptionId,
+                        resourceGroup: vault.id.split('/')[4],
+                        subscriptionId: subscription.subscriptionId,
                         properties: vault.properties
                     });
-                    addLogEntry(`Found Key Vault: ${vault.name} in ${vault.location}`, 'success');
                 }
                 
-                addLogEntry(`Found ${vaults.length} Key Vaults in subscription: ${sub.displayName}`, 'info');
-                return vaults;
+                allKeyVaults.push(...vaults);
+                totalVaults += vaults.length;
+                loadedVaults += vaults.length;
+                
+                loadingProgress.updateProgress(
+                    (loadedVaults / subscriptions.length) * 100,
+                    `Loaded ${loadedVaults} vaults from ${subscriptions.length} subscriptions`
+                );
+                
+                addLogEntry(`Loaded ${vaults.length} vaults from subscription ${subscription.subscriptionId}`, 'info');
+                
             } catch (error) {
-                addLogEntry(`Error fetching Key Vaults for subscription ${sub.displayName}: ${error.message}`, 'error');
-                console.error('Error fetching Key Vaults for subscription', sub.displayName, ':', error);
-                showNotification(`Warning: Could not load Key Vaults for subscription "${sub.displayName}"`, 'warning');
-                return [];
+                console.error(`Error loading vaults from subscription ${subscription.subscriptionId}:`, error);
+                addLogEntry(`Failed to load vaults from subscription ${subscription.subscriptionId}: ${error.message}`, 'error');
             }
-        });
+        }
         
-        const vaultResults = await Promise.all(vaultPromises);
-        allKeyVaults = vaultResults.flat();
+        // Initialize filtered vaults with all vaults
+        filteredKeyVaults = [...allKeyVaults];
         
-        addLogEntry(`Total Key Vaults discovered: ${allKeyVaults.length}`, 'success');
-        
-        loadingProgress.updateProgress(100, 'Rendering Key Vault list...');
-        filteredKeyVaults = [...allKeyVaults]; // Initialize filtered list
-        renderKeyVaultsPaginated(filteredKeyVaults);
-        
+        loadingProgress.updateMessage(`Successfully loaded ${allKeyVaults.length} Key Vaults`);
         loadingProgress.complete();
         
-        // Start background loading of first few vaults
-        addLogEntry('Starting background loading of first 5 Key Vaults...', 'info');
+        addLogEntry(`Successfully loaded ${allKeyVaults.length} Key Vaults from ${subscriptions.length} subscriptions`, 'success');
+        
+        // Render the vaults
+        renderKeyVaultsPaginated(filteredKeyVaults);
+        
+        // Start background loading of vault data
         startBackgroundLoading();
         
     } catch (error) {
-        addLogEntry(`Failed to load Key Vaults: ${error.message}`, 'error');
         console.error('Error loading Key Vaults:', error);
-        showError(keyvaultList, `Failed to load Key Vaults: ${error.message}. Please check your Azure credentials and permissions.`);
-        showNotification('Failed to load Key Vaults. Check console for details.', 'error');
         loadingProgress.complete();
+        showError(keyvaultList, `Failed to load Key Vaults: ${error.message}`);
+        addLogEntry(`Failed to load Key Vaults: ${error.message}`, 'error');
     }
 }
 
@@ -498,25 +492,279 @@ async function loadKeysForVault(vaultUrl, credential, vaultName) {
     return keys;
 }
 
-// Fixed Key Vault search functionality
+// Enhanced fuzzy search with better performance and accuracy
+function fuzzySearch(text, pattern) {
+    if (!pattern) return true;
+    if (!text) return false;
+    
+    // Convert to lowercase for case-insensitive search
+    text = text.toLowerCase();
+    pattern = pattern.toLowerCase();
+    
+    // Simple substring search for better performance
+    if (text.includes(pattern)) return true;
+    
+    // Fuzzy search for partial matches
+    const patternChars = pattern.split('');
+    let textIndex = 0;
+    let matchCount = 0;
+    
+    for (const char of patternChars) {
+        const foundIndex = text.indexOf(char, textIndex);
+        if (foundIndex === -1) {
+            // If we can't find the character, try from the beginning
+            const altIndex = text.indexOf(char);
+            if (altIndex === -1) return false;
+            textIndex = altIndex + 1;
+        } else {
+            textIndex = foundIndex + 1;
+        }
+        matchCount++;
+    }
+    
+    // Return true if we found at least 70% of the pattern characters
+    return matchCount >= Math.ceil(patternChars.length * 0.7);
+}
+
+// Enhanced search with multiple strategies
+function enhancedSearch(text, pattern) {
+    if (!pattern) return true;
+    if (!text) return false;
+    
+    const searchText = text.toLowerCase();
+    const searchPattern = pattern.toLowerCase();
+    
+    // 1. Exact match (highest priority)
+    if (searchText === searchPattern) return { match: true, score: 100 };
+    
+    // 2. Starts with (high priority)
+    if (searchText.startsWith(searchPattern)) return { match: true, score: 90 };
+    
+    // 3. Contains (medium priority)
+    if (searchText.includes(searchPattern)) return { match: true, score: 80 };
+    
+    // 4. Fuzzy search (lower priority)
+    if (fuzzySearch(searchText, searchPattern)) return { match: true, score: 60 };
+    
+    return { match: false, score: 0 };
+}
+
+// Optimized global search with better caching and performance
+async function handleGlobalSearch() {
+    const searchTerm = globalSearchInput.value.toLowerCase().trim();
+    
+    // Clear previous timeout
+    if (searchTimeout) {
+        clearTimeout(searchTimeout);
+    }
+    
+    // Debounce the search
+    searchTimeout = setTimeout(async () => {
+        await performGlobalSearch(searchTerm);
+    }, 300);
+}
+
+async function performGlobalSearch(searchTerm) {
+    if (!searchTerm) {
+        if (currentKeyVault) {
+            renderKeyVaultHeader(currentKeyVault);
+            if (currentTab === 'secrets') {
+                renderSecrets(allSecretsByVault.get(currentKeyVault.name) || []);
+            } else {
+                renderKeys(allKeysByVault.get(currentKeyVault.name) || []);
+            }
+        } else {
+            showWelcomeMessage();
+        }
+        return;
+    }
+    
+    // Check cache first
+    const cacheKey = `${searchTerm}_${currentTab}`;
+    if (searchCache.has(cacheKey)) {
+        const cachedResults = searchCache.get(cacheKey);
+        renderGlobalSearchResults(cachedResults, searchTerm);
+        addLogEntry(`Using cached search results for "${searchTerm}"`, 'info');
+        return;
+    }
+    
+    showLoading(currentTab === 'secrets' ? secretsContainer : keysContainer, 'Searching across loaded Key Vaults...');
+    mainHeader.innerHTML = `<h2><i class="fas fa-search"></i> Global Search Results</h2>`;
+    
+    // Search only in loaded vaults first (fast search)
+    const searchResults = await searchLoadedVaults(searchTerm);
+    
+    // Cache the results
+    searchCache.set(cacheKey, searchResults);
+    
+    // If no results in loaded vaults, offer to search all vaults
+    if (searchResults.length === 0) {
+        const unloadedVaults = allKeyVaults.filter(kv => !loadedVaults.has(kv.name));
+        if (unloadedVaults.length > 0) {
+            const container = currentTab === 'secrets' ? secretsContainer : keysContainer;
+            container.innerHTML = `
+                <div class="welcome-message">
+                    <i class="fas fa-search fa-3x"></i>
+                    <h2>No results in loaded Key Vaults</h2>
+                    <p>No ${currentTab} matching "${searchTerm}" were found in the currently loaded Key Vaults.</p>
+                    <p>${unloadedVaults.length} Key Vaults are not yet loaded. Would you like to search all Key Vaults?</p>
+                    <button class="btn btn-primary" onclick="searchAllVaults('${searchTerm}')">
+                        <i class="fas fa-search"></i> Search All Key Vaults
+                    </button>
+                </div>
+            `;
+            return;
+        }
+    }
+    
+    renderGlobalSearchResults(searchResults, searchTerm);
+}
+
+// Optimized search in loaded vaults with scoring
+async function searchLoadedVaults(searchTerm) {
+    const startTime = performance.now();
+    
+    const searchResults = [];
+    
+    // Search secrets in loaded vaults
+    for (const [vaultName, secrets] of allSecretsByVault.entries()) {
+        for (const secret of secrets) {
+            const nameMatch = enhancedSearch(secret.name, searchTerm);
+            const valueMatch = secret.value ? enhancedSearch(secret.value, searchTerm) : { match: false, score: 0 };
+            
+            if (nameMatch.match || valueMatch.match) {
+                searchResults.push({ 
+                    ...secret, 
+                    vaultName, 
+                    type: 'secret',
+                    searchScore: Math.max(nameMatch.score, valueMatch.score)
+                });
+            }
+        }
+    }
+    
+    // Search keys in loaded vaults
+    for (const [vaultName, keys] of allKeysByVault.entries()) {
+        for (const key of keys) {
+            const nameMatch = enhancedSearch(key.name, searchTerm);
+            const typeMatch = enhancedSearch(key.keyType, searchTerm);
+            
+            if (nameMatch.match || typeMatch.match) {
+                searchResults.push({ 
+                    ...key, 
+                    vaultName, 
+                    type: 'key',
+                    searchScore: Math.max(nameMatch.score, typeMatch.score)
+                });
+            }
+        }
+    }
+    
+    // Sort results by relevance score
+    searchResults.sort((a, b) => b.searchScore - a.searchScore);
+    
+    const endTime = performance.now();
+    performanceMetrics.searchTime = (endTime - startTime) / 1000; // Convert to seconds
+    
+    console.log(`Search completed in ${performanceMetrics.searchTime.toFixed(2)}s, found ${searchResults.length} results`);
+    addLogEntry(`Global search found ${searchResults.length} results in ${performanceMetrics.searchTime.toFixed(2)}s`, 'success');
+    
+    return searchResults;
+}
+
+// Enhanced Key Vault search with better performance
 function handleKeyVaultSearch() {
     const searchTerm = keyvaultSearchInput.value.toLowerCase().trim();
     console.log('Key Vault search term:', searchTerm);
+    console.log('Total Key Vaults available:', allKeyVaults.length);
     
     if (!searchTerm) {
         filteredKeyVaults = [...allKeyVaults];
+        console.log('No search term, showing all vaults:', filteredKeyVaults.length);
     } else {
-        filteredKeyVaults = allKeyVaults.filter(kv => 
-            kv.name.toLowerCase().includes(searchTerm) ||
-            kv.location.toLowerCase().includes(searchTerm) ||
-            kv.resourceGroup.toLowerCase().includes(searchTerm) ||
-            kv.subscriptionId.toLowerCase().includes(searchTerm)
-        );
+        // Use enhanced search for better results
+        const searchResults = allKeyVaults.map(kv => {
+            const nameMatch = enhancedSearch(kv.name, searchTerm);
+            const locationMatch = enhancedSearch(kv.location, searchTerm);
+            const resourceGroupMatch = enhancedSearch(kv.resourceGroup, searchTerm);
+            const subscriptionMatch = enhancedSearch(kv.subscriptionId, searchTerm);
+            
+            const maxScore = Math.max(
+                nameMatch.score, 
+                locationMatch.score, 
+                resourceGroupMatch.score, 
+                subscriptionMatch.score
+            );
+            
+            return {
+                vault: kv,
+                score: maxScore,
+                matches: nameMatch.match || locationMatch.match || resourceGroupMatch.match || subscriptionMatch.match
+            };
+        }).filter(result => result.matches);
+        
+        // Sort by relevance score
+        searchResults.sort((a, b) => b.score - a.score);
+        
+        filteredKeyVaults = searchResults.map(result => result.vault);
+        console.log('Filtered vaults:', filteredKeyVaults.length);
     }
     
     currentVaultPage = 1; // Reset to first page when searching
     renderKeyVaultsPaginated(filteredKeyVaults);
     addLogEntry(`Filtered Key Vaults: ${filteredKeyVaults.length} of ${allKeyVaults.length} match "${searchTerm}"`, 'info');
+}
+
+// Enhanced vault search with better performance
+function handleVaultSearch() {
+    const searchTerm = document.getElementById('vaultSearchInput')?.value.toLowerCase().trim();
+    
+    if (!currentKeyVault) return;
+    
+    if (!searchTerm) {
+        // Show all items
+        if (currentTab === 'secrets') {
+            renderSecrets(allSecretsByVault.get(currentKeyVault.name) || []);
+        } else {
+            renderKeys(allKeysByVault.get(currentKeyVault.name) || []);
+        }
+        return;
+    }
+    
+    // Filter items based on current tab with enhanced search
+    if (currentTab === 'secrets') {
+        const secrets = allSecretsByVault.get(currentKeyVault.name) || [];
+        const filteredSecrets = secrets.map(secret => {
+            const nameMatch = enhancedSearch(secret.name, searchTerm);
+            const valueMatch = secret.value ? enhancedSearch(secret.value, searchTerm) : { match: false, score: 0 };
+            
+            return {
+                secret,
+                score: Math.max(nameMatch.score, valueMatch.score),
+                matches: nameMatch.match || valueMatch.match
+            };
+        }).filter(result => result.matches)
+          .sort((a, b) => b.score - a.score)
+          .map(result => result.secret);
+        
+        renderSecrets(filteredSecrets, searchTerm);
+    } else {
+        const keys = allKeysByVault.get(currentKeyVault.name) || [];
+        const filteredKeys = keys.map(key => {
+            const nameMatch = enhancedSearch(key.name, searchTerm);
+            const typeMatch = enhancedSearch(key.keyType, searchTerm);
+            
+            return {
+                key,
+                score: Math.max(nameMatch.score, typeMatch.score),
+                matches: nameMatch.match || typeMatch.match
+            };
+        }).filter(result => result.matches)
+          .sort((a, b) => b.score - a.score)
+          .map(result => result.key);
+        
+        renderKeys(filteredKeys, searchTerm);
+    }
 }
 
 // Paginated Key Vault rendering for better performance with improved display
@@ -535,21 +783,30 @@ function renderKeyVaultsPaginated(keyVaults) {
     const endIndex = startIndex + vaultsPerPage;
     const pageVaults = keyVaults.slice(startIndex, endIndex);
     
-    // Add count indicator
+    // Add count indicator with search highlighting
+    const searchTerm = keyvaultSearchInput.value.trim();
     const countDiv = document.createElement('div');
-    countDiv.className = 'keyvault-count';
-    countDiv.textContent = `Showing ${startIndex + 1}-${Math.min(endIndex, keyVaults.length)} of ${keyVaults.length} Key Vaults`;
+    countDiv.className = `keyvault-count ${searchTerm ? 'highlight' : ''}`;
+    countDiv.textContent = searchTerm ? 
+        `Found ${keyVaults.length} Key Vaults matching "${searchTerm}" (showing ${startIndex + 1}-${Math.min(endIndex, keyVaults.length)})` :
+        `Showing ${startIndex + 1}-${Math.min(endIndex, keyVaults.length)} of ${keyVaults.length} Key Vaults`;
     keyvaultList.appendChild(countDiv);
     
     // Render vaults for current page
     pageVaults.forEach(kv => {
         const vaultDiv = document.createElement('div');
         vaultDiv.className = 'keyvault-item';
+        
+        // Highlight search terms in vault name
+        const highlightedName = searchTerm ? highlightSearchTerm(kv.name, searchTerm) : kv.name;
+        const highlightedLocation = searchTerm ? highlightSearchTerm(kv.location, searchTerm) : kv.location;
+        const highlightedResourceGroup = searchTerm ? highlightSearchTerm(kv.resourceGroup, searchTerm) : kv.resourceGroup;
+        
         vaultDiv.innerHTML = `
             <div class="keyvault-info">
-                <h3 class="keyvault-name" title="${kv.name}">${kv.name}</h3>
-                <p><strong>Location:</strong> ${kv.location}</p>
-                <p><strong>Resource Group:</strong> ${kv.resourceGroup}</p>
+                <h3 class="keyvault-name" title="${kv.name}">${highlightedName}</h3>
+                <p><strong>Location:</strong> ${highlightedLocation}</p>
+                <p><strong>Resource Group:</strong> ${highlightedResourceGroup}</p>
                 <p><strong>Subscription:</strong> ${kv.subscriptionId.substring(0, 8)}...</p>
                 ${loadedVaults.has(kv.name) ? '<span class="loaded-badge">✓ Loaded</span>' : '<span class="not-loaded-badge">Not Loaded</span>'}
             </div>
@@ -669,189 +926,7 @@ function renderKeyVaultHeader(keyVault) {
     document.getElementById('bulkOperationsBtn').addEventListener('click', showBulkOperations);
 }
 
-// Optimized global search with caching and background processing
-async function handleGlobalSearch() {
-    const searchTerm = globalSearchInput.value.toLowerCase().trim();
-    if (!searchTerm) {
-        if (currentKeyVault) {
-            renderKeyVaultHeader(currentKeyVault);
-            if (currentTab === 'secrets') {
-                renderSecrets(allSecretsByVault.get(currentKeyVault.name) || []);
-            } else {
-                renderKeys(allKeysByVault.get(currentKeyVault.name) || []);
-            }
-        } else {
-            showWelcomeMessage();
-        }
-        return;
-    }
-    
-    // Check cache first
-    const cacheKey = `${searchTerm}_${currentTab}`;
-    if (searchCache.has(cacheKey)) {
-        renderGlobalSearchResults(searchCache.get(cacheKey), searchTerm);
-        return;
-    }
-    
-    showLoading(currentTab === 'secrets' ? secretsContainer : keysContainer, 'Searching across loaded Key Vaults...');
-    mainHeader.innerHTML = `<h2><i class="fas fa-search"></i> Global Search Results</h2>`;
-    
-    // Search only in loaded vaults first (fast search)
-    const searchResults = await searchLoadedVaults(searchTerm);
-    
-    // Cache the results
-    searchCache.set(cacheKey, searchResults);
-    
-    // If no results in loaded vaults, offer to search all vaults
-    if (searchResults.length === 0) {
-        const unloadedVaults = allKeyVaults.filter(kv => !loadedVaults.has(kv.name));
-        if (unloadedVaults.length > 0) {
-            const container = currentTab === 'secrets' ? secretsContainer : keysContainer;
-            container.innerHTML = `
-                <div class="welcome-message">
-                    <i class="fas fa-search fa-3x"></i>
-                    <h2>No results in loaded Key Vaults</h2>
-                    <p>No secrets or keys matching "${searchTerm}" were found in the currently loaded Key Vaults.</p>
-                    <p>${unloadedVaults.length} Key Vaults are not yet loaded. Would you like to search all Key Vaults?</p>
-                    <button class="btn btn-primary" onclick="searchAllVaults('${searchTerm}')">
-                        <i class="fas fa-search"></i> Search All Key Vaults
-                    </button>
-                </div>
-            `;
-            return;
-        }
-    }
-    
-    renderGlobalSearchResults(searchResults, searchTerm);
-}
-
-// Search only in loaded vaults (fast)
-async function searchLoadedVaults(searchTerm) {
-    const startTime = performance.now();
-    
-    const searchResults = [];
-    
-    // Search secrets in loaded vaults
-    for (const [vaultName, secrets] of allSecretsByVault.entries()) {
-        for (const secret of secrets) {
-            if (fuzzySearch(secret.name.toLowerCase(), searchTerm)) {
-                searchResults.push({ ...secret, vaultName, type: 'secret' });
-            }
-        }
-    }
-    
-    // Search keys in loaded vaults
-    for (const [vaultName, keys] of allKeysByVault.entries()) {
-        for (const key of keys) {
-            if (fuzzySearch(key.name.toLowerCase(), searchTerm)) {
-                searchResults.push({ ...key, vaultName, type: 'key' });
-            }
-        }
-    }
-    
-    const endTime = performance.now();
-    performanceMetrics.searchTime = (endTime - startTime) / 1000; // Convert to seconds
-    
-    console.log(`Search completed in ${performanceMetrics.searchTime.toFixed(2)}s, found ${searchResults.length} results`);
-    
-    return searchResults;
-}
-
-// Optimized function to search all vaults with background loading
-async function searchAllVaults(searchTerm) {
-    showLoading(currentTab === 'secrets' ? secretsContainer : keysContainer, 'Loading and searching all Key Vaults...');
-    
-    // Load data for unloaded vaults in batches
-    const unloadedVaults = allKeyVaults.filter(kv => !loadedVaults.has(kv.name));
-    const batchSize = 3; // Load 3 vaults at a time to avoid overwhelming the API
-    
-    for (let i = 0; i < unloadedVaults.length; i += batchSize) {
-        const batch = unloadedVaults.slice(i, i + batchSize);
-        const batchPromises = batch.map(async (vault) => {
-            try {
-                await loadVaultDataInBackground(vault);
-                loadedVaults.add(vault.name);
-                return true;
-            } catch (error) {
-                console.warn(`Failed to load data for vault ${vault.name}:`, error);
-                return false;
-            }
-        });
-        
-        await Promise.all(batchPromises);
-        
-        // Update progress
-        const progress = Math.min(((i + batchSize) / unloadedVaults.length) * 100, 100);
-        const container = currentTab === 'secrets' ? secretsContainer : keysContainer;
-        container.innerHTML = `<div class="loading">Loading Key Vaults... ${Math.round(progress)}%</div>`;
-    }
-    
-    // Update key vault list to show loading status
-    renderKeyVaultsPaginated(filteredKeyVaults);
-    
-    // Now search all loaded data
-    const searchResults = await searchLoadedVaults(searchTerm);
-    
-    // Cache the results
-    const cacheKey = `${searchTerm}_${currentTab}`;
-    searchCache.set(cacheKey, searchResults);
-    
-    renderGlobalSearchResults(searchResults, searchTerm);
-}
-
-// Optimized secret loading with caching
-async function loadSecretsForKeyVault(keyVault) {
-    // Check if already loaded
-    if (allSecretsByVault.has(keyVault.name)) {
-        renderSecrets(allSecretsByVault.get(keyVault.name));
-        return;
-    }
-    
-    showLoading(secretsContainer, 'Loading secrets...');
-    try {
-        console.log('Loading secrets for Key Vault:', keyVault.name);
-        const credential = new DefaultAzureCredential();
-        const vaultUrl = `https://${keyVault.name}.vault.azure.net/`;
-        console.log('Key Vault URL:', vaultUrl);
-        
-        const secrets = await loadSecretsForVault(vaultUrl, credential, keyVault.name);
-        console.log('Total secrets found:', secrets.length);
-        allSecretsByVault.set(keyVault.name, secrets);
-        renderSecrets(secrets);
-        showNotification(`Loaded ${secrets.length} secrets from ${keyVault.name}`, 'success');
-    } catch (error) {
-        console.error('Error loading secrets for', keyVault.name, ':', error);
-        showError(secretsContainer, `Failed to load secrets: ${error.message}. Please check your Key Vault access policies.`);
-        showNotification('Failed to load secrets. Check console for details.', 'error');
-    }
-}
-
-// Optimized key loading with caching
-async function loadKeysForKeyVault(keyVault) {
-    // Check if already loaded
-    if (allKeysByVault.has(keyVault.name)) {
-        renderKeys(allKeysByVault.get(keyVault.name));
-        return;
-    }
-    
-    showLoading(keysContainer, 'Loading keys...');
-    try {
-        console.log('Loading keys for Key Vault:', keyVault.name);
-        const credential = new DefaultAzureCredential();
-        const vaultUrl = `https://${keyVault.name}.vault.azure.net/`;
-        
-        const keys = await loadKeysForVault(vaultUrl, credential, keyVault.name);
-        console.log('Total keys found:', keys.length);
-        allKeysByVault.set(keyVault.name, keys);
-        renderKeys(keys);
-        showNotification(`Loaded ${keys.length} keys from ${keyVault.name}`, 'success');
-    } catch (error) {
-        console.error('Error loading keys for', keyVault.name, ':', error);
-        showError(keysContainer, `Failed to load keys: ${error.message}. Please check your Key Vault access policies.`);
-        showNotification('Failed to load keys. Check console for details.', 'error');
-    }
-}
-
+// Enhanced search result rendering with performance indicator
 function renderGlobalSearchResults(results, searchTerm) {
     const container = currentTab === 'secrets' ? secretsContainer : keysContainer;
     container.innerHTML = '';
@@ -861,34 +936,83 @@ function renderGlobalSearchResults(results, searchTerm) {
             <div class="welcome-message">
                 <i class="fas fa-search fa-3x"></i>
                 <h2>No results found</h2>
-                <p>No secrets or keys matching "${searchTerm}" were found in any Key Vault.</p>
+                <p>No ${currentTab} matching "${searchTerm}" were found in any Key Vault.</p>
             </div>
         `;
         return;
     }
     
-    // Group by vault
-    const grouped = {};
-    for (const result of results) {
-        if (!grouped[result.vaultName]) grouped[result.vaultName] = [];
-        grouped[result.vaultName].push(result);
+    // Filter results by current tab
+    const tabResults = results.filter(result => result.type === currentTab.slice(0, -1)); // Remove 's' from 'secrets'/'keys'
+    
+    if (tabResults.length === 0) {
+        container.innerHTML = `
+            <div class="welcome-message">
+                <i class="fas fa-search fa-3x"></i>
+                <h2>No ${currentTab} found</h2>
+                <p>No ${currentTab} matching "${searchTerm}" were found, but there are ${results.length} other results.</p>
+                <p>Switch to the other tab to see all results.</p>
+            </div>
+        `;
+        return;
     }
     
-    for (const [vaultName, items] of Object.entries(grouped)) {
-        const groupHeader = document.createElement('h3');
-        groupHeader.innerHTML = `<i class="fas fa-vault"></i> ${vaultName}`;
-        container.appendChild(groupHeader);
+    // Add search performance indicator
+    const performanceDiv = document.createElement('div');
+    performanceDiv.className = 'search-performance';
+    performanceDiv.innerHTML = `
+        <i class="fas fa-tachometer-alt"></i>
+        <span>Search completed in ${performanceMetrics.searchTime.toFixed(2)}s</span>
+        <span>•</span>
+        <span>Found ${tabResults.length} ${currentTab} across ${new Set(tabResults.map(r => r.vaultName)).size} vaults</span>
+        <span>•</span>
+        <span>Cache hit: ${searchCache.has(`${searchTerm}_${currentTab}`) ? 'Yes' : 'No'}</span>
+    `;
+    container.appendChild(performanceDiv);
+    
+    // Add header with search info
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'content-header';
+    headerDiv.innerHTML = `
+        <div class="content-info">
+            <span>Found ${tabResults.length} ${currentTab} matching "${searchTerm}"</span>
+            <span class="search-highlight">Global Search Results</span>
+        </div>
+    `;
+    container.appendChild(headerDiv);
+    
+    // Group results by vault for better organization
+    const resultsByVault = {};
+    tabResults.forEach(result => {
+        if (!resultsByVault[result.vaultName]) {
+            resultsByVault[result.vaultName] = [];
+        }
+        resultsByVault[result.vaultName].push(result);
+    });
+    
+    // Sort vaults by number of results (most results first)
+    const sortedVaults = Object.entries(resultsByVault).sort((a, b) => b[1].length - a[1].length);
+    
+    // Render results grouped by vault
+    sortedVaults.forEach(([vaultName, vaultResults]) => {
+        const vaultDiv = document.createElement('div');
+        vaultDiv.className = 'search-vault-group';
+        vaultDiv.innerHTML = `
+            <h3 class="vault-group-header">
+                <i class="fas fa-vault"></i> ${vaultName}
+                <span class="result-count">${vaultResults.length} ${currentTab.slice(0, -1)}</span>
+            </h3>
+        `;
         
-        items.forEach(item => {
-            if (item.type === 'secret') {
-                const secretCard = createSecretCard(item);
-                container.appendChild(secretCard);
-            } else {
-                const keyCard = createKeyCard(item);
-                container.appendChild(keyCard);
-            }
+        vaultResults.forEach(result => {
+            const card = currentTab === 'secrets' ? 
+                createSecretCard(result, searchTerm) : 
+                createKeyCard(result, searchTerm);
+            vaultDiv.appendChild(card);
         });
-    }
+        
+        container.appendChild(vaultDiv);
+    });
 }
 
 // Performance monitoring function
@@ -931,23 +1055,6 @@ function cleanupMemory() {
     console.log(`Memory cleanup completed in ${(endTime - startTime).toFixed(2)}ms`);
     
     updatePerformanceMetrics();
-}
-
-// Optimized fuzzy search
-function fuzzySearch(text, pattern) {
-    if (!pattern) return true;
-    if (!text) return false;
-    
-    const patternChars = pattern.split('');
-    let textIndex = 0;
-    
-    for (const char of patternChars) {
-        const foundIndex = text.indexOf(char, textIndex);
-        if (foundIndex === -1) return false;
-        textIndex = foundIndex + 1;
-    }
-    
-    return true;
 }
 
 // Clear global search with memory cleanup
@@ -1401,14 +1508,28 @@ function deleteKey(keyName) {
     }
 }
 
-// Create secret card
+// Enhanced secret card creation with search scoring
 function createSecretCard(secret, searchTerm = '') {
     const card = document.createElement('div');
     card.className = 'secret-card';
     
+    // Add search result styling if this is from a search
+    if (secret.vaultName) {
+        card.classList.add('search-result-card');
+    }
+    
     const highlightedName = searchTerm ? highlightSearchTerm(secret.name, searchTerm) : secret.name;
     
+    // Determine search score class if available
+    let scoreClass = '';
+    if (secret.searchScore) {
+        if (secret.searchScore >= 80) scoreClass = 'high';
+        else if (secret.searchScore >= 60) scoreClass = 'medium';
+        else scoreClass = 'low';
+    }
+    
     card.innerHTML = `
+        ${secret.searchScore ? `<div class="search-score ${scoreClass}">${secret.searchScore}</div>` : ''}
         <div class="secret-header">
             <h3 class="secret-name">${highlightedName}</h3>
             <div class="secret-actions">
@@ -1427,6 +1548,10 @@ function createSecretCard(secret, searchTerm = '') {
             </div>
         </div>
         <div class="secret-info">
+            ${secret.vaultName ? `<div class="info-item">
+                <span class="info-label">Vault</span>
+                <span class="info-value">${secret.vaultName}</span>
+            </div>` : ''}
             <div class="info-item">
                 <span class="info-label">Version</span>
                 <span class="info-value">${secret.version || 'N/A'}</span>
@@ -1462,14 +1587,28 @@ function createSecretCard(secret, searchTerm = '') {
     return card;
 }
 
-// Create key card
+// Enhanced key card creation with search scoring
 function createKeyCard(key, searchTerm = '') {
     const card = document.createElement('div');
     card.className = 'key-card';
     
+    // Add search result styling if this is from a search
+    if (key.vaultName) {
+        card.classList.add('search-result-card');
+    }
+    
     const highlightedName = searchTerm ? highlightSearchTerm(key.name, searchTerm) : key.name;
     
+    // Determine search score class if available
+    let scoreClass = '';
+    if (key.searchScore) {
+        if (key.searchScore >= 80) scoreClass = 'high';
+        else if (key.searchScore >= 60) scoreClass = 'medium';
+        else scoreClass = 'low';
+    }
+    
     card.innerHTML = `
+        ${key.searchScore ? `<div class="search-score ${scoreClass}">${key.searchScore}</div>` : ''}
         <div class="key-header">
             <h3 class="key-name">${highlightedName}</h3>
             <div class="key-actions">
@@ -1482,19 +1621,17 @@ function createKeyCard(key, searchTerm = '') {
             </div>
         </div>
         <div class="key-info">
+            ${key.vaultName ? `<div class="info-item">
+                <span class="info-label">Vault</span>
+                <span class="info-value">${key.vaultName}</span>
+            </div>` : ''}
             <div class="info-item">
                 <span class="info-label">Type</span>
-                <span class="info-value">
-                    <span class="key-type-badge ${key.keyType.toLowerCase()}">${key.keyType}</span>
-                </span>
+                <span class="info-value">${key.keyType}</span>
             </div>
             <div class="info-item">
                 <span class="info-label">Size</span>
                 <span class="info-value">${key.keySize || 'N/A'}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Version</span>
-                <span class="info-value">${key.version || 'N/A'}</span>
             </div>
             <div class="info-item">
                 <span class="info-label">Created</span>
@@ -1553,40 +1690,6 @@ function addVaultSearchBar() {
     
     vaultSearchInput.addEventListener('input', handleVaultSearch);
     clearVaultSearchBtn.addEventListener('click', clearVaultSearch);
-}
-
-// Handle search within individual Key Vault
-function handleVaultSearch() {
-    const searchTerm = document.getElementById('vaultSearchInput').value.toLowerCase().trim();
-    
-    if (!currentKeyVault) return;
-    
-    if (!searchTerm) {
-        // Show all items
-        if (currentTab === 'secrets') {
-            renderSecrets(allSecretsByVault.get(currentKeyVault.name) || []);
-        } else {
-            renderKeys(allKeysByVault.get(currentKeyVault.name) || []);
-        }
-        return;
-    }
-    
-    // Filter items based on current tab
-    if (currentTab === 'secrets') {
-        const secrets = allSecretsByVault.get(currentKeyVault.name) || [];
-        const filteredSecrets = secrets.filter(secret => 
-            secret.name.toLowerCase().includes(searchTerm) ||
-            (secret.value && secret.value.toLowerCase().includes(searchTerm))
-        );
-        renderSecrets(filteredSecrets, searchTerm);
-    } else {
-        const keys = allKeysByVault.get(currentKeyVault.name) || [];
-        const filteredKeys = keys.filter(key => 
-            key.name.toLowerCase().includes(searchTerm) ||
-            key.keyType.toLowerCase().includes(searchTerm)
-        );
-        renderKeys(filteredKeys, searchTerm);
-    }
 }
 
 // Clear vault search
@@ -1787,5 +1890,108 @@ async function updateSecret(secretName) {
         console.error('Error updating secret:', error);
         showNotification(`Failed to update secret: ${error.message}`, 'error');
         addLogEntry(`Failed to update secret ${secretName}: ${error.message}`, 'error');
+    }
+}
+
+// Optimized function to search all vaults with background loading
+async function searchAllVaults(searchTerm) {
+    showLoading(currentTab === 'secrets' ? secretsContainer : keysContainer, 'Loading and searching all Key Vaults...');
+    
+    // Load data for unloaded vaults in batches
+    const unloadedVaults = allKeyVaults.filter(kv => !loadedVaults.has(kv.name));
+    const batchSize = 3; // Load 3 vaults at a time to avoid overwhelming the API
+    
+    addLogEntry(`Starting search across all ${unloadedVaults.length} unloaded vaults`, 'info');
+    
+    for (let i = 0; i < unloadedVaults.length; i += batchSize) {
+        const batch = unloadedVaults.slice(i, i + batchSize);
+        const batchPromises = batch.map(async (vault) => {
+            try {
+                await loadVaultDataInBackground(vault);
+                loadedVaults.add(vault.name);
+                addLogEntry(`Loaded vault: ${vault.name}`, 'success');
+                return true;
+            } catch (error) {
+                console.warn(`Failed to load data for vault ${vault.name}:`, error);
+                addLogEntry(`Failed to load vault ${vault.name}: ${error.message}`, 'error');
+                return false;
+            }
+        });
+        
+        await Promise.all(batchPromises);
+        
+        // Update progress
+        const progress = Math.min(((i + batchSize) / unloadedVaults.length) * 100, 100);
+        const container = currentTab === 'secrets' ? secretsContainer : keysContainer;
+        container.innerHTML = `<div class="loading">Loading Key Vaults... ${Math.round(progress)}% (${i + batchSize}/${unloadedVaults.length})</div>`;
+    }
+    
+    // Update key vault list to show loading status
+    renderKeyVaultsPaginated(filteredKeyVaults);
+    
+    // Now search all loaded data
+    const searchResults = await searchLoadedVaults(searchTerm);
+    
+    // Cache the results
+    const cacheKey = `${searchTerm}_${currentTab}`;
+    searchCache.set(cacheKey, searchResults);
+    
+    renderGlobalSearchResults(searchResults, searchTerm);
+}
+
+// Optimized secret loading with caching
+async function loadSecretsForKeyVault(keyVault) {
+    // Check if already loaded
+    if (allSecretsByVault.has(keyVault.name)) {
+        renderSecrets(allSecretsByVault.get(keyVault.name));
+        return;
+    }
+    
+    showLoading(secretsContainer, 'Loading secrets...');
+    try {
+        console.log('Loading secrets for Key Vault:', keyVault.name);
+        const credential = new DefaultAzureCredential();
+        const vaultUrl = `https://${keyVault.name}.vault.azure.net/`;
+        console.log('Key Vault URL:', vaultUrl);
+        
+        const secrets = await loadSecretsForVault(vaultUrl, credential, keyVault.name);
+        console.log('Total secrets found:', secrets.length);
+        allSecretsByVault.set(keyVault.name, secrets);
+        renderSecrets(secrets);
+        showNotification(`Loaded ${secrets.length} secrets from ${keyVault.name}`, 'success');
+        addLogEntry(`Loaded ${secrets.length} secrets from ${keyVault.name}`, 'success');
+    } catch (error) {
+        console.error('Error loading secrets for', keyVault.name, ':', error);
+        showError(secretsContainer, `Failed to load secrets: ${error.message}. Please check your Key Vault access policies.`);
+        showNotification('Failed to load secrets. Check console for details.', 'error');
+        addLogEntry(`Failed to load secrets from ${keyVault.name}: ${error.message}`, 'error');
+    }
+}
+
+// Optimized key loading with caching
+async function loadKeysForKeyVault(keyVault) {
+    // Check if already loaded
+    if (allKeysByVault.has(keyVault.name)) {
+        renderKeys(allKeysByVault.get(keyVault.name));
+        return;
+    }
+    
+    showLoading(keysContainer, 'Loading keys...');
+    try {
+        console.log('Loading keys for Key Vault:', keyVault.name);
+        const credential = new DefaultAzureCredential();
+        const vaultUrl = `https://${keyVault.name}.vault.azure.net/`;
+        
+        const keys = await loadKeysForVault(vaultUrl, credential, keyVault.name);
+        console.log('Total keys found:', keys.length);
+        allKeysByVault.set(keyVault.name, keys);
+        renderKeys(keys);
+        showNotification(`Loaded ${keys.length} keys from ${keyVault.name}`, 'success');
+        addLogEntry(`Loaded ${keys.length} keys from ${keyVault.name}`, 'success');
+    } catch (error) {
+        console.error('Error loading keys for', keyVault.name, ':', error);
+        showError(keysContainer, `Failed to load keys: ${error.message}. Please check your Key Vault access policies.`);
+        showNotification('Failed to load keys. Check console for details.', 'error');
+        addLogEntry(`Failed to load keys from ${keyVault.name}: ${error.message}`, 'error');
     }
 } 
