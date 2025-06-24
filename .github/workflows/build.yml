@@ -27,28 +27,18 @@ jobs:
           - os: windows-latest
             platform: windows
             arch: x64
-          - os: windows-latest
-            platform: windows
-            arch: arm64
-          - os: macos-latest
-            platform: macos
-            arch: x64
           - os: macos-latest
             platform: macos
             arch: arm64
           - os: ubuntu-latest
             platform: linux
             arch: x64
-          - os: ubuntu-latest
-            platform: linux
-            arch: arm64
-          - os: ubuntu-latest
-            platform: linux
-            arch: armv7l
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -56,8 +46,35 @@ jobs:
         node-version: '18'
         cache: 'npm'
 
-    - name: Install dependencies
+    - name: Install dependencies (Windows)
+      if: matrix.platform == 'windows'
+      shell: pwsh
       run: npm ci
+
+    - name: Install dependencies (Unix)
+      if: matrix.platform != 'windows'
+      run: npm ci
+
+    - name: Clear caches and verify configuration
+      run: |
+        echo "Clearing any potential caches..."
+        rm -rf node_modules/.cache || true
+        rm -rf .electron-builder || true
+        echo "Verifying package.json configuration..."
+        node -e "
+          const pkg = JSON.parse(require('fs').readFileSync('package.json', 'utf8'));
+          const invalidProps = Object.keys(pkg.build || {}).filter(key => key.startsWith('mac-'));
+          if (invalidProps.length > 0) {
+            console.error('Invalid properties found:', invalidProps);
+            process.exit(1);
+          }
+          console.log('✅ No invalid properties found in package.json');
+        "
+        echo "Current package.json build configuration:"
+        node -e "
+          const pkg = JSON.parse(require('fs').readFileSync('package.json', 'utf8'));
+          console.log(JSON.stringify(pkg.build, null, 2));
+        "
 
     - name: Setup icons for build (Windows)
       if: matrix.platform == 'windows'
@@ -96,38 +113,35 @@ jobs:
       if: matrix.platform == 'windows'
       shell: pwsh
       run: |
-        if ("${{ matrix.arch }}" -eq "x64") {
-          npm run build:win-x64
-        } else {
-          npm run build:win-arm64
-        }
+        Write-Host "Building for Windows..."
+        Write-Host "Current directory: $(Get-Location)"
+        Write-Host "Node version: $(node --version)"
+        Write-Host "NPM version: $(npm --version)"
+        Write-Host "Running: npm run build:win"
+        npm run build:win
+        Write-Host "Build completed successfully!"
 
     - name: Build application (macOS)
       if: matrix.platform == 'macos'
       run: |
-        echo "Building for macOS ${{ matrix.arch }}..."
+        echo "Building for macOS..."
         echo "Current directory: $(pwd)"
         echo "Node version: $(node --version)"
         echo "NPM version: $(npm --version)"
-        if [ "${{ matrix.arch }}" == "x64" ]; then
-          echo "Running: npm run build:mac-x64"
-          npm run build:mac-x64
-        else
-          echo "Running: npm run build:mac-arm64"
-          npm run build:mac-arm64
-        fi
+        echo "Running: npm run build:mac"
+        npm run build:mac
         echo "Build completed successfully!"
 
     - name: Build application (Linux)
       if: matrix.platform == 'linux'
       run: |
-        if [ "${{ matrix.arch }}" == "x64" ]; then
-          npm run build:linux-x64
-        elif [ "${{ matrix.arch }}" == "arm64" ]; then
-          npm run build:linux-arm64
-        else
-          npm run build:linux-armv7l
-        fi
+        echo "Building for Linux..."
+        echo "Current directory: $(pwd)"
+        echo "Node version: $(node --version)"
+        echo "NPM version: $(npm --version)"
+        echo "Running: npm run build:linux"
+        npm run build:linux
+        echo "Build completed successfully!"
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -173,6 +187,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -180,8 +196,35 @@ jobs:
         node-version: '18'
         cache: 'npm'
 
-    - name: Install dependencies
+    - name: Install dependencies (Windows)
+      if: matrix.platform == 'windows'
+      shell: pwsh
       run: npm ci
+
+    - name: Install dependencies (Unix)
+      if: matrix.platform != 'windows'
+      run: npm ci
+
+    - name: Clear caches and verify configuration
+      run: |
+        echo "Clearing any potential caches..."
+        rm -rf node_modules/.cache || true
+        rm -rf .electron-builder || true
+        echo "Verifying package.json configuration..."
+        node -e "
+          const pkg = JSON.parse(require('fs').readFileSync('package.json', 'utf8'));
+          const invalidProps = Object.keys(pkg.build || {}).filter(key => key.startsWith('mac-'));
+          if (invalidProps.length > 0) {
+            console.error('Invalid properties found:', invalidProps);
+            process.exit(1);
+          }
+          console.log('✅ No invalid properties found in package.json');
+        "
+        echo "Current package.json build configuration:"
+        node -e "
+          const pkg = JSON.parse(require('fs').readFileSync('package.json', 'utf8'));
+          console.log(JSON.stringify(pkg.build, null, 2));
+        "
 
     - name: Setup Linux dependencies
       if: matrix.platform == 'linux'
@@ -226,7 +269,13 @@ jobs:
       if: matrix.platform == 'windows'
       shell: pwsh
       run: |
+        Write-Host "Building for Windows (single platform)..."
+        Write-Host "Current directory: $(Get-Location)"
+        Write-Host "Node version: $(node --version)"
+        Write-Host "NPM version: $(npm --version)"
+        Write-Host "Running: npm run build:win"
         npm run build:win
+        Write-Host "Build completed successfully!"
 
     - name: Build application (macOS)
       if: matrix.platform == 'macos'
