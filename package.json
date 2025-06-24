@@ -18,8 +18,8 @@
     "build:all": "npm run build:win && npm run build:mac && npm run build:linux",
     "build:win-x64": "electron-builder --win --x64",
     "build:win-arm64": "electron-builder --win --arm64",
-    "build:mac-x64": "electron-builder --mac --x64",
-    "build:mac-arm64": "electron-builder --mac --arm64",
+    "build:mac-x64": "electron-builder --mac --x64 --config.mac=mac-x64",
+    "build:mac-arm64": "electron-builder --mac --arm64 --config.mac=mac-arm64",
     "build:linux-x64": "electron-builder --linux --x64",
     "build:linux-arm64": "electron-builder --linux --arm64",
     "build:linux-armv7l": "electron-builder --linux --armv7l",
@@ -35,7 +35,10 @@
     "electron",
     "cross-platform"
   ],
-  "author": "DmarshalTU",
+  "author": {
+    "name": "DmarshalTU",
+    "email": "dmarshaltu@gmail.com"
+  },
   "license": "MIT",
   "devDependencies": {
     "electron": "^28.0.0",
@@ -90,6 +93,38 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false
     },
+    "mac-x64": {
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "mac-arm64": {
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["arm64"]
+        }
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
     "win": {
       "icon": "assets/icon.ico",
       "target": [
@@ -120,7 +155,8 @@
           "arch": ["x64", "arm64", "armv7l"]
         }
       ],
-      "category": "Development"
+      "category": "Development",
+      "maintainer": "DmarshalTU <dmarshaltu@gmail.com>"
     },
     "nsis": {
       "oneClick": false,
