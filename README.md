@@ -1,180 +1,205 @@
-# Azure Secrets Explorer
+# Azure Key Vault Secrets Explorer
 
-A modern, cross-platform desktop application for efficiently searching and managing Azure Key Vault secrets. Built with Electron and Azure SDK, this tool provides a much better user experience compared to the Azure Portal's cumbersome interface.
+A modern, high-performance desktop application for searching and managing Azure Key Vault secrets and keys. Built with Electron and optimized for handling large-scale Azure environments with 100+ Key Vaults.
+
+## 🚀 Performance Optimizations
+
+This application has been specifically optimized to handle large numbers of Azure Key Vaults efficiently:
+
+### Key Performance Improvements
+
+1. **Lazy Loading**: Key Vaults are loaded on-demand rather than all at once
+2. **Pagination**: Key Vaults are displayed in pages of 20 to prevent UI freezing
+3. **Background Loading**: Data is loaded in the background without blocking the UI
+4. **Caching**: Search results and vault data are cached for faster subsequent access
+5. **Parallel Processing**: Multiple vaults are loaded simultaneously using Promise.all()
+6. **Memory Management**: Automatic cleanup of old cache entries and search results
+7. **Debounced Search**: Global search is debounced to prevent excessive API calls
+8. **Batch Loading**: When searching all vaults, they're loaded in batches of 3 to avoid overwhelming the API
+
+### Performance Metrics
+
+The application includes real-time performance monitoring:
+- Vault loading time tracking
+- Search performance metrics
+- Memory usage monitoring
+- Cache hit rates
+- Total items loaded
+
+### Scalability Features
+
+- **100+ Key Vaults**: Tested and optimized for environments with 100+ Key Vaults
+- **1000+ Secrets/Keys**: Efficiently handles thousands of secrets and keys
+- **Real-time Search**: Fast fuzzy search across all loaded data
+- **Progressive Loading**: UI remains responsive while loading large datasets
 
 ## Features
 
-- 🔍 **Fuzzy Search**: Quickly find secrets by name or value with intelligent fuzzy matching
-- 🖥️ **Cross-Platform**: Works on Windows, macOS, and Linux
-- 🎨 **Modern UI**: Clean, responsive interface with dark mode support
-- ⚡ **Fast Performance**: No more waiting for "Load More" buttons
-- 🔐 **Secure**: Uses Azure's official SDK and authentication
-- 💾 **Persistent Storage**: Remembers your subscriptions and Key Vaults
-- 📋 **Copy to Clipboard**: One-click copying of secret values
-- 👁️ **Show/Hide Values**: Toggle secret visibility for security
-- ➕ **Add Secrets**: Create new secrets directly from the app
+### 🔍 Advanced Search
+- **Global Search**: Search across all Key Vaults simultaneously
+- **Fuzzy Search**: Intelligent pattern matching for secret and key names
+- **Real-time Results**: Instant search results with caching
+- **Search History**: Cached search results for faster subsequent searches
 
-## Screenshots
+### 📊 Key Vault Management
+- **Pagination**: Browse large numbers of Key Vaults efficiently
+- **Status Indicators**: Visual indicators showing loaded vs unloaded vaults
+- **Background Loading**: Load vault data without blocking the UI
+- **Error Handling**: Graceful handling of access permission issues
 
-The application features a clean sidebar for navigation and a main content area for displaying secrets with search functionality.
+### 🔐 Secret Management
+- **Secure Display**: Secrets are hidden by default with toggle visibility
+- **Bulk Operations**: Export, enable, disable, or delete multiple secrets
+- **Version Management**: View and manage secret versions
+- **Metadata Display**: Creation dates, expiration, and status information
 
-## Prerequisites
+### 🔑 Key Management
+- **Key Types**: Support for RSA, EC, and OCT key types
+- **Key Properties**: Display key size, type, and metadata
+- **Status Tracking**: Monitor key enabled/disabled status
+- **Bulk Operations**: Manage multiple keys simultaneously
 
-Before running the application, you need to:
-
-1. **Install Azure CLI** (if not already installed):
-   ```bash
-   # macOS
-   brew install azure-cli
-   
-   # Windows
-   winget install Microsoft.AzureCLI
-   
-   # Linux
-   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-   ```
-
-2. **Login to Azure**:
-   ```bash
-   az login
-   ```
-
-3. **Set up permissions**: Ensure your account has access to the Key Vaults you want to manage.
+### 📤 Export Capabilities
+- **Multiple Formats**: Export to CSV, JSON, or plain text
+- **Selective Export**: Choose specific secrets, keys, or all data
+- **Value Inclusion**: Option to include or exclude secret values
+- **Batch Export**: Export data from multiple vaults
 
 ## Installation
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd az-secrets
-   ```
+### Prerequisites
+- Node.js 16+ 
+- Azure CLI (for authentication)
+- Azure subscription with Key Vault access
 
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Run the application**:
-   ```bash
-   npm start
-   ```
-
-## Development
-
-To run the application in development mode with DevTools:
-
+### Setup
 ```bash
+# Clone the repository
+git clone <repository-url>
+cd az-secrets
+
+# Install dependencies
+npm install
+
+# Start the application
+npm start
+
+# For development with DevTools
 npm run dev
 ```
 
-## Building
-
-### For macOS:
-```bash
-npm run build:mac
-```
-
-### For Windows:
-```bash
-npm run build:win
-```
-
-### For Linux:
-```bash
-npm run build:linux
-```
+### Azure Authentication
+1. Install Azure CLI: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli
+2. Login to Azure: `az login`
+3. Ensure your account has access to the Key Vaults you want to manage
 
 ## Usage
 
-1. **Launch the application** - The app will start with a welcome screen
-2. **Select a subscription** - Click on a subscription in the sidebar to load its Key Vaults
-3. **Choose a Key Vault** - Select a Key Vault to view its secrets
-4. **Search secrets** - Use the search bar to find specific secrets using fuzzy search
-5. **Manage secrets** - Copy values, toggle visibility, or delete secrets as needed
+### Initial Setup
+1. Launch the application
+2. The app will automatically discover all accessible Key Vaults
+3. Key Vaults are loaded progressively - only the first 5 are loaded initially
+4. Click on a Key Vault to load its secrets and keys
 
-### Search Features
+### Searching
+1. **Global Search**: Use the top search bar to search across all loaded vaults
+2. **Vault Search**: Use the sidebar search to filter Key Vaults by name, location, or resource group
+3. **Search All**: If no results found in loaded vaults, click "Search All Key Vaults" to load and search all vaults
 
-The fuzzy search works by:
-- Matching characters in sequence (e.g., "db" matches "database-connection-string")
-- Searching both secret names and values
-- Case-insensitive matching
-- Real-time filtering as you type
+### Managing Secrets
+1. Select a Key Vault from the sidebar
+2. Switch to the "Secrets" tab
+3. View, edit, or delete secrets as needed
+4. Use bulk operations for managing multiple secrets
 
-### Keyboard Shortcuts
+### Managing Keys
+1. Select a Key Vault from the sidebar
+2. Switch to the "Keys" tab
+3. View key properties and metadata
+4. Perform bulk operations on keys
 
-- `Ctrl/Cmd + F`: Focus search input
-- `Escape`: Clear search
-- `Ctrl/Cmd + C`: Copy selected secret value
+## Performance Tips
 
-## Configuration
+### For Large Environments (100+ Key Vaults)
+1. **Use Pagination**: Navigate through vaults using the pagination controls
+2. **Search First**: Use global search to find specific items before loading all vaults
+3. **Monitor Performance**: Watch the performance indicator in the bottom-left corner
+4. **Clear Cache**: Restart the app periodically to clear accumulated cache
 
-The application stores your preferences locally using `electron-store`. Data is stored in:
-- **macOS**: `~/Library/Application Support/az-secrets/`
-- **Windows**: `%APPDATA%\az-secrets\`
-- **Linux**: `~/.config/az-secrets/`
-
-## Security
-
-- All Azure operations use the official Azure SDK
-- Authentication is handled through Azure CLI or managed identity
-- Secret values are hidden by default and can be toggled
-- No secrets are stored locally - they're fetched on-demand
+### For High-Security Environments
+1. **Disable Value Display**: Use the export feature with "Exclude Values" option
+2. **Audit Trail**: Monitor the console for access logs
+3. **Regular Cleanup**: Clear search cache regularly to remove sensitive data from memory
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **"Failed to load subscriptions"**
-   - Ensure you're logged in to Azure CLI: `az login`
-   - Check your Azure account permissions
+**App becomes unresponsive with many vaults**
+- Use pagination to browse vaults in smaller groups
+- Use search to find specific items instead of loading all vaults
+- Restart the app to clear memory cache
 
-2. **"Failed to load Key Vaults"**
-   - Verify your account has access to the subscription
-   - Check if the subscription has any Key Vaults
+**Slow search performance**
+- Ensure you're searching in loaded vaults first
+- Use more specific search terms
+- Clear search cache if it becomes too large
 
-3. **"Failed to load secrets"**
-   - Ensure your account has Key Vault access policies configured
-   - Check if the Key Vault has any secrets
+**Authentication errors**
+- Verify Azure CLI is installed and you're logged in
+- Check your Azure subscription permissions
+- Ensure you have access to the Key Vaults you're trying to view
 
-### Authentication Methods
+**Memory usage issues**
+- The app automatically manages memory, but you can restart to clear cache
+- Monitor the performance indicator for memory usage
+- Use the search feature instead of loading all vaults at once
 
-The application supports multiple authentication methods:
-- Azure CLI authentication (recommended)
-- Managed Identity (for Azure-hosted environments)
-- Service Principal authentication
+## Development
+
+### Building
+```bash
+# Build for current platform
+npm run build
+
+# Build for specific platforms
+npm run build:mac
+npm run build:win
+npm run build:linux
+```
+
+### Performance Testing
+The application includes built-in performance monitoring:
+- Check the console for detailed performance logs
+- Monitor the performance indicator in the UI
+- Use browser DevTools to analyze memory usage
+
+## Security Considerations
+
+- **Local Storage**: Secret values are stored in memory only, not persisted to disk
+- **Authentication**: Uses Azure's DefaultAzureCredential for secure authentication
+- **Network**: All communication uses HTTPS with Azure's secure endpoints
+- **Memory**: Sensitive data is cleared from memory when possible
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
+2. Create a feature branch
 3. Make your changes
-4. Test thoroughly
+4. Test with large numbers of Key Vaults
 5. Submit a pull request
 
 ## License
 
-MIT License - see LICENSE file for details.
-
-## Roadmap
-
-- [ ] Support for Azure Key Vault Keys and Certificates
-- [ ] Bulk operations (import/export secrets)
-- [ ] Secret version management
-- [ ] Integration with Azure DevOps pipelines
-- [ ] Custom themes and UI customization
-- [ ] Export secrets to various formats
-- [ ] Secret rotation reminders
-- [ ] Audit log viewing
+MIT License - see LICENSE file for details
 
 ## Support
 
-If you encounter any issues or have questions, please:
-1. Check the troubleshooting section above
-2. Search existing issues on GitHub
-3. Create a new issue with detailed information
+For issues and questions:
+1. Check the troubleshooting section
+2. Review the console logs for error details
+3. Open an issue on GitHub with performance metrics and error details
 
-## Acknowledgments
+---
 
-- Built with [Electron](https://electronjs.org/)
-- Uses [Azure SDK for JavaScript](https://github.com/Azure/azure-sdk-for-js)
-- Icons from [Font Awesome](https://fontawesome.com/) 
+**Note**: This application is designed for managing Azure Key Vaults in development and testing environments. For production use, ensure compliance with your organization's security policies and consider using Azure's official management tools for sensitive operations. 

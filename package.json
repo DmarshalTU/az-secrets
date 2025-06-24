@@ -32,6 +32,10 @@
     "@azure/keyvault-secrets": "^4.7.0",
     "electron-store": "^8.1.0"
   },
+  "overrides": {
+    "glob": "^10.3.10",
+    "inflight": "^2.0.0"
+  },
   "build": {
     "appId": "com.yourcompany.az-secrets",
     "productName": "Azure Secrets Explorer",
