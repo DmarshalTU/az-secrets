@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Secrets Explorer</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="global-search-bar">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" id="globalSearchInput" placeholder="Global search secrets or keys across all Key Vaults..." class="search-input">
+        <button class="btn btn-secondary" id="clearGlobalSearch">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2><i class="fas fa-key"></i> Key Vaults</h2>
+            </div>
+            <div class="sidebar-content">
+                <div class="keyvault-list" id="keyvaultList">
+                    <div class="loading">Loading Key Vaults...</div>
+                </div>
+                <button class="btn btn-primary" id="refreshKeyVaults">
+                    <i class="fas fa-sync"></i> Refresh
+                </button>
+            </div>
+        </div>
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="header" id="mainHeader">
+                <!-- This will be dynamically updated: show Key Vault name and actions, or global search results info -->
+            </div>
+            <div class="content">
+                <div class="secrets-container" id="secretsContainer">
+                    <div class="welcome-message">
+                        <i class="fas fa-key fa-3x"></i>
+                        <h2>Welcome to Azure Secrets Explorer</h2>
+                        <p>Select a Key Vault or use global search to start exploring your secrets and keys</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Add Secret Modal -->
+    <div class="modal" id="addSecretModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Secret</h3>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="secretName">Secret Name:</label>
+                    <input type="text" id="secretName" placeholder="Enter secret name">
+                </div>
+                <div class="form-group">
+                    <label for="secretValue">Secret Value:</label>
+                    <textarea id="secretValue" placeholder="Enter secret value" rows="4"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="secretDescription">Description (optional):</label>
+                    <input type="text" id="secretDescription" placeholder="Enter description">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelAdd">Cancel</button>
+                <button class="btn btn-primary" id="saveSecret">Save Secret</button>
+            </div>
+        </div>
+    </div>
+    <script src="renderer.js"></script>
+</body>
+</html> 

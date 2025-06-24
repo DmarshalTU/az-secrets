@@ -1,0 +1,14 @@
+# Icon Placeholder
+
+This is a placeholder for the application icon. 
+
+To add a proper icon:
+
+1. Create a 512x512 PNG icon for the application
+2. Name it `icon.png` and place it in this directory
+3. For macOS, you'll also need an `.icns` file
+4. For Windows, you'll need an `.ico` file
+
+You can convert your PNG to these formats using online tools or image editing software.
+
+The icon should represent the application's purpose - managing Azure Key Vault secrets. 
