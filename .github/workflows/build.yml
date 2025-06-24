@@ -21,6 +21,8 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     strategy:
       matrix:
         include:
@@ -55,7 +57,24 @@ jobs:
       if: matrix.platform != 'windows'
       run: npm ci
 
-    - name: Clear caches and verify configuration
+    - name: Clear caches and verify configuration (Windows)
+      if: matrix.platform == 'windows'
+      shell: pwsh
+      run: |
+        Write-Host "Clearing any potential caches..."
+        if (Test-Path "node_modules\.cache") { Remove-Item -Recurse -Force "node_modules\.cache" }
+        if (Test-Path ".electron-builder") { Remove-Item -Recurse -Force ".electron-builder" }
+        Write-Host "Verifying package.json configuration..."
+        $pkg = Get-Content "package.json" | ConvertFrom-Json
+        $invalidProps = $pkg.build.PSObject.Properties.Name | Where-Object { $_ -like "mac-*" }
+        if ($invalidProps) {
+          Write-Error "Invalid properties found: $($invalidProps -join ', ')"
+          exit 1
+        }
+        Write-Host "✅ No invalid properties found in package.json"
+
+    - name: Clear caches and verify configuration (Unix)
+      if: matrix.platform != 'windows'
       run: |
         echo "Clearing any potential caches..."
         rm -rf node_modules/.cache || true
@@ -69,11 +88,6 @@ jobs:
             process.exit(1);
           }
           console.log('✅ No invalid properties found in package.json');
-        "
-        echo "Current package.json build configuration:"
-        node -e "
-          const pkg = JSON.parse(require('fs').readFileSync('package.json', 'utf8'));
-          console.log(JSON.stringify(pkg.build, null, 2));
         "
 
     - name: Setup icons for build (Windows)
@@ -179,6 +193,8 @@ jobs:
     if: github.event.inputs.platform == 'windows'
     runs-on: windows-latest
     timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -220,6 +236,8 @@ jobs:
     if: github.event.inputs.platform == 'macos'
     runs-on: macos-latest
     timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -258,6 +276,8 @@ jobs:
     if: github.event.inputs.platform == 'linux'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
