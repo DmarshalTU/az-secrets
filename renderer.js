@@ -497,7 +497,7 @@ async function loadKeysForVault(vaultUrl, credential, vaultName) {
     return keys;
 }
 
-// Key Vault search functionality with pagination
+// Key Vault search functionality with pagination and improved display
 function handleKeyVaultSearch() {
     const searchTerm = keyvaultSearchInput.value.toLowerCase().trim();
     
@@ -507,15 +507,17 @@ function handleKeyVaultSearch() {
         filteredKeyVaults = allKeyVaults.filter(kv => 
             kv.name.toLowerCase().includes(searchTerm) ||
             kv.location.toLowerCase().includes(searchTerm) ||
-            kv.resourceGroup.toLowerCase().includes(searchTerm)
+            kv.resourceGroup.toLowerCase().includes(searchTerm) ||
+            kv.subscriptionId.toLowerCase().includes(searchTerm)
         );
     }
     
     currentVaultPage = 1; // Reset to first page when searching
     renderKeyVaultsPaginated(filteredKeyVaults);
+    addLogEntry(`Filtered Key Vaults: ${filteredKeyVaults.length} of ${allKeyVaults.length} match "${searchTerm}"`, 'info');
 }
 
-// Paginated Key Vault rendering for better performance
+// Paginated Key Vault rendering for better performance with improved display
 function renderKeyVaultsPaginated(keyVaults) {
     keyvaultList.innerHTML = '';
     
@@ -543,10 +545,10 @@ function renderKeyVaultsPaginated(keyVaults) {
         vaultDiv.className = 'keyvault-item';
         vaultDiv.innerHTML = `
             <div class="keyvault-info">
-                <h3>${kv.name}</h3>
+                <h3 class="keyvault-name" title="${kv.name}">${kv.name}</h3>
                 <p><strong>Location:</strong> ${kv.location}</p>
                 <p><strong>Resource Group:</strong> ${kv.resourceGroup}</p>
-                <p><strong>Subscription:</strong> ${kv.subscriptionId}</p>
+                <p><strong>Subscription:</strong> ${kv.subscriptionId.substring(0, 8)}...</p>
                 ${loadedVaults.has(kv.name) ? '<span class="loaded-badge">✓ Loaded</span>' : '<span class="not-loaded-badge">Not Loaded</span>'}
             </div>
             <button class="btn btn-primary" onclick="selectKeyVault(${JSON.stringify(kv).replace(/"/g, '&quot;')})">
@@ -584,20 +586,31 @@ function changeVaultPage(newPage) {
     renderKeyVaultsPaginated(filteredKeyVaults);
 }
 
-// Optimized Key Vault selection with lazy loading
+// Optimized Key Vault selection with lazy loading and search bar
 async function selectKeyVault(keyVault) {
     currentKeyVault = keyVault;
     currentPage = 1;
     
+    // Add vault search bar if not already present
+    if (!document.querySelector('.vault-search-bar')) {
+        addVaultSearchBar();
+    }
+    
     // Load vault data if not already loaded
     if (!loadedVaults.has(keyVault.name)) {
-        showLoading(secretsContainer, `Loading data for ${keyVault.name}...`);
+        const loadingProgress = showLoadingWithProgress(secretsContainer, `Loading data for ${keyVault.name}...`);
+        addLogEntry(`Loading data for Key Vault: ${keyVault.name}`, 'info');
+        
         try {
             await loadVaultDataInBackground(keyVault);
             loadedVaults.add(keyVault.name);
+            addLogEntry(`Successfully loaded Key Vault: ${keyVault.name}`, 'success');
+            loadingProgress.complete();
         } catch (error) {
+            addLogEntry(`Failed to load Key Vault ${keyVault.name}: ${error.message}`, 'error');
             console.error('Error loading vault data:', error);
             showError(secretsContainer, `Failed to load data for ${keyVault.name}: ${error.message}`);
+            loadingProgress.complete();
             return;
         }
     }
@@ -886,7 +899,8 @@ function updatePerformanceMetrics() {
     const memoryIndicator = document.getElementById('memoryIndicator');
     if (memoryIndicator) {
         const totalItems = performanceMetrics.totalSecrets + performanceMetrics.totalKeys;
-        memoryIndicator.textContent = `Vaults: ${performanceMetrics.loadedVaultsCount} | Items: ${totalItems} | Cache: ${searchCache.size}`;
+        const cacheSize = searchCache.size;
+        memoryIndicator.textContent = `Vaults: ${performanceMetrics.loadedVaultsCount} | Items: ${totalItems} | Cache: ${cacheSize}`;
     }
 }
 
@@ -952,14 +966,14 @@ function clearGlobalSearch() {
     }
 }
 
-function renderSecrets(secrets) {
+function renderSecrets(secrets, searchTerm = '') {
     secretsContainer.innerHTML = '';
     if (secrets.length === 0) {
         secretsContainer.innerHTML = `
             <div class="welcome-message">
                 <i class="fas fa-search fa-3x"></i>
                 <h2>No secrets found</h2>
-                <p>This Key Vault has no secrets.</p>
+                <p>${searchTerm ? `No secrets matching "${searchTerm}"` : 'This Key Vault has no secrets.'}</p>
             </div>
         `;
         return;
@@ -977,6 +991,7 @@ function renderSecrets(secrets) {
     headerDiv.innerHTML = `
         <div class="content-info">
             <span>Showing ${startIndex + 1}-${Math.min(endIndex, secrets.length)} of ${secrets.length} secrets</span>
+            ${searchTerm ? `<span class="search-highlight">Filtered by: "${searchTerm}"</span>` : ''}
         </div>
         ${totalPages > 1 ? `
         <div class="pagination">
@@ -994,19 +1009,19 @@ function renderSecrets(secrets) {
     
     // Render secrets for current page
     pageSecrets.forEach(secret => {
-        const secretCard = createSecretCard(secret);
+        const secretCard = createSecretCard(secret, searchTerm);
         secretsContainer.appendChild(secretCard);
     });
 }
 
-function renderKeys(keys) {
+function renderKeys(keys, searchTerm = '') {
     keysContainer.innerHTML = '';
     if (keys.length === 0) {
         keysContainer.innerHTML = `
             <div class="welcome-message">
                 <i class="fas fa-lock fa-3x"></i>
                 <h2>No keys found</h2>
-                <p>This Key Vault has no cryptographic keys.</p>
+                <p>${searchTerm ? `No keys matching "${searchTerm}"` : 'This Key Vault has no cryptographic keys.'}</p>
             </div>
         `;
         return;
@@ -1024,6 +1039,7 @@ function renderKeys(keys) {
     headerDiv.innerHTML = `
         <div class="content-info">
             <span>Showing ${startIndex + 1}-${Math.min(endIndex, keys.length)} of ${keys.length} keys</span>
+            ${searchTerm ? `<span class="search-highlight">Filtered by: "${searchTerm}"</span>` : ''}
         </div>
         ${totalPages > 1 ? `
         <div class="pagination">
@@ -1041,7 +1057,7 @@ function renderKeys(keys) {
     
     // Render keys for current page
     pageKeys.forEach(key => {
-        const keyCard = createKeyCard(key);
+        const keyCard = createKeyCard(key, searchTerm);
         keysContainer.appendChild(keyCard);
     });
 }
@@ -1378,55 +1394,56 @@ function deleteKey(keyName) {
 }
 
 // Create secret card
-function createSecretCard(secret) {
+function createSecretCard(secret, searchTerm = '') {
     const card = document.createElement('div');
     card.className = 'secret-card';
     
-    const createdDate = secret.created ? new Date(secret.created).toLocaleDateString() : 'N/A';
-    const updatedDate = secret.updated ? new Date(secret.updated).toLocaleDateString() : 'N/A';
-    const expiresDate = secret.expires ? new Date(secret.expires).toLocaleDateString() : 'Never';
+    const highlightedName = searchTerm ? highlightSearchTerm(secret.name, searchTerm) : secret.name;
     
     card.innerHTML = `
         <div class="secret-header">
-            <div class="secret-name">${secret.name}</div>
+            <h3 class="secret-name">${highlightedName}</h3>
             <div class="secret-actions">
-                <button class="btn btn-secondary" onclick="copyToClipboard('${secret.value}')">
-                    <i class="fas fa-copy"></i> Copy
+                <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('${secret.name}')" title="Copy name">
+                    <i class="fas fa-copy"></i>
                 </button>
-                <button class="btn btn-danger" onclick="deleteSecret('${secret.name}')">
-                    <i class="fas fa-trash"></i> Delete
+                <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('${secret.value || ''}')" title="Copy value">
+                    <i class="fas fa-clipboard"></i>
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="deleteSecret('${secret.name}')" title="Delete secret">
+                    <i class="fas fa-trash"></i>
                 </button>
             </div>
         </div>
         <div class="secret-info">
             <div class="info-item">
-                <div class="info-label">Version</div>
-                <div class="info-value">${secret.version}</div>
+                <span class="info-label">Version</span>
+                <span class="info-value">${secret.version || 'N/A'}</span>
             </div>
             <div class="info-item">
-                <div class="info-label">Created</div>
-                <div class="info-value">${createdDate}</div>
+                <span class="info-label">Created</span>
+                <span class="info-value">${secret.created ? new Date(secret.created).toLocaleString() : 'N/A'}</span>
             </div>
             <div class="info-item">
-                <div class="info-label">Updated</div>
-                <div class="info-value">${updatedDate}</div>
+                <span class="info-label">Updated</span>
+                <span class="info-value">${secret.updated ? new Date(secret.updated).toLocaleString() : 'N/A'}</span>
             </div>
             <div class="info-item">
-                <div class="info-label">Expires</div>
-                <div class="info-value">${expiresDate}</div>
+                <span class="info-label">Expires</span>
+                <span class="info-value">${secret.expires ? new Date(secret.expires).toLocaleString() : 'Never'}</span>
             </div>
             <div class="info-item">
-                <div class="info-label">Status</div>
-                <div class="info-value">
+                <span class="info-label">Status</span>
+                <span class="info-value">
                     <span class="status-indicator ${secret.enabled ? 'status-enabled' : 'status-disabled'}"></span>
                     ${secret.enabled ? 'Enabled' : 'Disabled'}
-                </div>
+                </span>
             </div>
         </div>
-        <div class="secret-value hidden" id="secret-value-${secret.name}">
-            ${secret.value}
+        <div class="secret-value hidden" id="secret-${secret.name.replace(/[^a-zA-Z0-9]/g, '-')}">
+            ${secret.value || 'No value'}
             <button class="toggle-password" onclick="togglePasswordVisibility('${secret.name}')">
-                <i class="fas fa-eye"></i>
+                <i class="fas fa-eye"></i> Show
             </button>
         </div>
     `;
@@ -1435,64 +1452,139 @@ function createSecretCard(secret) {
 }
 
 // Create key card
-function createKeyCard(key) {
+function createKeyCard(key, searchTerm = '') {
     const card = document.createElement('div');
     card.className = 'key-card';
     
-    const createdDate = key.created ? new Date(key.created).toLocaleDateString() : 'N/A';
-    const updatedDate = key.updated ? new Date(key.updated).toLocaleDateString() : 'N/A';
-    const expiresDate = key.expires ? new Date(key.expires).toLocaleDateString() : 'Never';
+    const highlightedName = searchTerm ? highlightSearchTerm(key.name, searchTerm) : key.name;
     
     card.innerHTML = `
         <div class="key-header">
-            <div class="key-name">${key.name}</div>
+            <h3 class="key-name">${highlightedName}</h3>
             <div class="key-actions">
-                <button class="btn btn-secondary" onclick="copyToClipboard('${key.name}')">
-                    <i class="fas fa-copy"></i> Copy Name
+                <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('${key.name}')" title="Copy name">
+                    <i class="fas fa-copy"></i>
                 </button>
-                <button class="btn btn-danger" onclick="deleteKey('${key.name}')">
-                    <i class="fas fa-trash"></i> Delete
+                <button class="btn btn-danger btn-sm" onclick="deleteKey('${key.name}')" title="Delete key">
+                    <i class="fas fa-trash"></i>
                 </button>
             </div>
         </div>
         <div class="key-info">
             <div class="info-item">
-                <div class="info-label">Type</div>
-                <div class="info-value">
+                <span class="info-label">Type</span>
+                <span class="info-value">
                     <span class="key-type-badge ${key.keyType.toLowerCase()}">${key.keyType}</span>
-                </div>
+                </span>
             </div>
             <div class="info-item">
-                <div class="info-label">Size</div>
-                <div class="info-value">${key.keySize || 'N/A'}</div>
+                <span class="info-label">Size</span>
+                <span class="info-value">${key.keySize || 'N/A'}</span>
             </div>
             <div class="info-item">
-                <div class="info-label">Version</div>
-                <div class="info-value">${key.version}</div>
+                <span class="info-label">Version</span>
+                <span class="info-value">${key.version || 'N/A'}</span>
             </div>
             <div class="info-item">
-                <div class="info-label">Created</div>
-                <div class="info-value">${createdDate}</div>
+                <span class="info-label">Created</span>
+                <span class="info-value">${key.created ? new Date(key.created).toLocaleString() : 'N/A'}</span>
             </div>
             <div class="info-item">
-                <div class="info-label">Updated</div>
-                <div class="info-value">${updatedDate}</div>
+                <span class="info-label">Updated</span>
+                <span class="info-value">${key.updated ? new Date(key.updated).toLocaleString() : 'N/A'}</span>
             </div>
             <div class="info-item">
-                <div class="info-label">Expires</div>
-                <div class="info-value">${expiresDate}</div>
+                <span class="info-label">Expires</span>
+                <span class="info-value">${key.expires ? new Date(key.expires).toLocaleString() : 'Never'}</span>
             </div>
             <div class="info-item">
-                <div class="info-label">Status</div>
-                <div class="info-value">
+                <span class="info-label">Status</span>
+                <span class="info-value">
                     <span class="status-indicator ${key.enabled ? 'status-enabled' : 'status-disabled'}"></span>
                     ${key.enabled ? 'Enabled' : 'Disabled'}
-                </div>
+                </span>
             </div>
         </div>
     `;
     
     return card;
+}
+
+// Helper function to highlight search terms
+function highlightSearchTerm(text, searchTerm) {
+    if (!searchTerm) return text;
+    
+    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return text.replace(regex, '<span class="search-highlight">$1</span>');
+}
+
+// Add search functionality within individual Key Vaults
+function addVaultSearchBar() {
+    const searchBar = document.createElement('div');
+    searchBar.className = 'vault-search-bar';
+    searchBar.innerHTML = `
+        <div class="search-container">
+            <i class="fas fa-search search-icon"></i>
+            <input type="text" id="vaultSearchInput" placeholder="Search within this Key Vault..." class="search-input">
+            <button class="btn btn-secondary btn-sm" id="clearVaultSearch">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    // Insert after the header
+    const header = document.querySelector('.header');
+    header.parentNode.insertBefore(searchBar, header.nextSibling);
+    
+    // Add event listeners
+    const vaultSearchInput = document.getElementById('vaultSearchInput');
+    const clearVaultSearchBtn = document.getElementById('clearVaultSearch');
+    
+    vaultSearchInput.addEventListener('input', handleVaultSearch);
+    clearVaultSearchBtn.addEventListener('click', clearVaultSearch);
+}
+
+// Handle search within individual Key Vault
+function handleVaultSearch() {
+    const searchTerm = document.getElementById('vaultSearchInput').value.toLowerCase().trim();
+    
+    if (!currentKeyVault) return;
+    
+    if (!searchTerm) {
+        // Show all items
+        if (currentTab === 'secrets') {
+            renderSecrets(allSecretsByVault.get(currentKeyVault.name) || []);
+        } else {
+            renderKeys(allKeysByVault.get(currentKeyVault.name) || []);
+        }
+        return;
+    }
+    
+    // Filter items based on current tab
+    if (currentTab === 'secrets') {
+        const secrets = allSecretsByVault.get(currentKeyVault.name) || [];
+        const filteredSecrets = secrets.filter(secret => 
+            secret.name.toLowerCase().includes(searchTerm) ||
+            (secret.value && secret.value.toLowerCase().includes(searchTerm))
+        );
+        renderSecrets(filteredSecrets, searchTerm);
+    } else {
+        const keys = allKeysByVault.get(currentKeyVault.name) || [];
+        const filteredKeys = keys.filter(key => 
+            key.name.toLowerCase().includes(searchTerm) ||
+            key.keyType.toLowerCase().includes(searchTerm)
+        );
+        renderKeys(filteredKeys, searchTerm);
+    }
+}
+
+// Clear vault search
+function clearVaultSearch() {
+    const vaultSearchInput = document.getElementById('vaultSearchInput');
+    if (vaultSearchInput) {
+        vaultSearchInput.value = '';
+        handleVaultSearch();
+    }
 }
 
 // Make functions globally available for onclick handlers
