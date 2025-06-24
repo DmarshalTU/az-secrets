@@ -36,16 +36,41 @@
                 <!-- This will be dynamically updated: show Key Vault name and actions, or global search results info -->
             </div>
             <div class="content">
-                <div class="secrets-container" id="secretsContainer">
-                    <div class="welcome-message">
-                        <i class="fas fa-key fa-3x"></i>
-                        <h2>Welcome to Azure Secrets Explorer</h2>
-                        <p>Select a Key Vault or use global search to start exploring your secrets and keys</p>
+                <!-- Tabs -->
+                <div class="tabs" id="tabs">
+                    <button class="tab-btn active" data-tab="secrets">
+                        <i class="fas fa-key"></i> Secrets
+                    </button>
+                    <button class="tab-btn" data-tab="keys">
+                        <i class="fas fa-lock"></i> Keys
+                    </button>
+                </div>
+                
+                <!-- Tab Content -->
+                <div class="tab-content">
+                    <div class="tab-pane active" id="secretsTab">
+                        <div class="secrets-container" id="secretsContainer">
+                            <div class="welcome-message">
+                                <i class="fas fa-key fa-3x"></i>
+                                <h2>Welcome to Azure Secrets Explorer</h2>
+                                <p>Select a Key Vault or use global search to start exploring your secrets and keys</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tab-pane" id="keysTab">
+                        <div class="keys-container" id="keysContainer">
+                            <div class="welcome-message">
+                                <i class="fas fa-lock fa-3x"></i>
+                                <h2>Key Management</h2>
+                                <p>Select a Key Vault to view and manage your cryptographic keys</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    
     <!-- Add Secret Modal -->
     <div class="modal" id="addSecretModal">
         <div class="modal-content">
@@ -73,6 +98,84 @@
             </div>
         </div>
     </div>
+    
+    <!-- Add Key Modal -->
+    <div class="modal" id="addKeyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Key</h3>
+                <button class="close-btn" id="closeKeyModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="keyName">Key Name:</label>
+                    <input type="text" id="keyName" placeholder="Enter key name">
+                </div>
+                <div class="form-group">
+                    <label for="keyType">Key Type:</label>
+                    <select id="keyType">
+                        <option value="RSA">RSA</option>
+                        <option value="EC">Elliptic Curve</option>
+                        <option value="oct">Octet (Symmetric)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="keySize">Key Size:</label>
+                    <select id="keySize">
+                        <option value="2048">2048 bits</option>
+                        <option value="3072">3072 bits</option>
+                        <option value="4096">4096 bits</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="keyDescription">Description (optional):</label>
+                    <input type="text" id="keyDescription" placeholder="Enter description">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelAddKey">Cancel</button>
+                <button class="btn btn-primary" id="saveKey">Create Key</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Export Modal -->
+    <div class="modal" id="exportModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Export Data</h3>
+                <button class="close-btn" id="closeExportModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="exportFormat">Export Format:</label>
+                    <select id="exportFormat">
+                        <option value="json">JSON</option>
+                        <option value="csv">CSV</option>
+                        <option value="txt">Plain Text</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="exportType">Export Type:</label>
+                    <select id="exportType">
+                        <option value="secrets">Secrets Only</option>
+                        <option value="keys">Keys Only</option>
+                        <option value="all">Secrets and Keys</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="includeValues"> Include secret/key values
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelExport">Cancel</button>
+                <button class="btn btn-primary" id="exportData">Export</button>
+            </div>
+        </div>
+    </div>
+    
     <script src="renderer.js"></script>
 </body>
 </html> 
