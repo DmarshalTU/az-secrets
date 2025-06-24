@@ -14,6 +14,10 @@ let allKeysByVault = {};    // { vaultName: [keys] }
 let currentKeyVault = null;
 let globalSearchResults = [];
 let currentTab = 'secrets';
+let filteredKeyVaults = []; // For key vault search
+let loadedVaults = new Set(); // Track which vaults have been loaded
+let currentPage = 1;
+let itemsPerPage = 50; // Show 50 items per page
 
 // DOM elements
 const keyvaultList = document.getElementById('keyvaultList');
@@ -23,6 +27,7 @@ const mainHeader = document.getElementById('mainHeader');
 const globalSearchInput = document.getElementById('globalSearchInput');
 const clearGlobalSearchBtn = document.getElementById('clearGlobalSearch');
 const refreshKeyVaultsBtn = document.getElementById('refreshKeyVaults');
+const keyvaultSearchInput = document.getElementById('keyvaultSearchInput');
 const addSecretBtn = document.getElementById('addSecret');
 const addSecretModal = document.getElementById('addSecretModal');
 const closeModalBtn = document.getElementById('closeModal');
@@ -43,6 +48,7 @@ function setupEventListeners() {
     refreshKeyVaultsBtn.addEventListener('click', loadAllKeyVaults);
     globalSearchInput.addEventListener('input', handleGlobalSearch);
     clearGlobalSearchBtn.addEventListener('click', clearGlobalSearch);
+    keyvaultSearchInput.addEventListener('input', handleKeyVaultSearch);
     
     // Tab switching
     tabBtns.forEach(btn => {
@@ -78,6 +84,7 @@ function setupEventListeners() {
 // Tab switching
 function switchTab(tabName) {
     currentTab = tabName;
+    currentPage = 1; // Reset pagination when switching tabs
     
     // Update tab buttons
     tabBtns.forEach(btn => {
@@ -149,7 +156,8 @@ async function loadAllKeyVaults() {
         }
         
         console.log('Total Key Vaults found:', allKeyVaults.length);
-        renderKeyVaults(allKeyVaults);
+        filteredKeyVaults = [...allKeyVaults]; // Initialize filtered list
+        renderKeyVaults(filteredKeyVaults);
         
     } catch (error) {
         console.error('Error loading Key Vaults:', error);
@@ -158,16 +166,44 @@ async function loadAllKeyVaults() {
     }
 }
 
+// Key Vault search functionality
+function handleKeyVaultSearch() {
+    const searchTerm = keyvaultSearchInput.value.toLowerCase().trim();
+    
+    if (!searchTerm) {
+        filteredKeyVaults = [...allKeyVaults];
+    } else {
+        filteredKeyVaults = allKeyVaults.filter(kv => 
+            kv.name.toLowerCase().includes(searchTerm) ||
+            kv.location.toLowerCase().includes(searchTerm) ||
+            kv.resourceGroup.toLowerCase().includes(searchTerm)
+        );
+    }
+    
+    renderKeyVaults(filteredKeyVaults);
+}
+
 function renderKeyVaults(keyVaults) {
     keyvaultList.innerHTML = '';
     if (keyVaults.length === 0) {
-        keyvaultList.innerHTML = '<div class="loading">No Key Vaults found</div>';
+        const message = keyvaultSearchInput.value.trim() ? 'No Key Vaults match your search' : 'No Key Vaults found';
+        keyvaultList.innerHTML = `<div class="loading">${message}</div>`;
         return;
     }
+    
+    // Add count indicator
+    const countDiv = document.createElement('div');
+    countDiv.className = 'keyvault-count';
+    countDiv.textContent = `Showing ${keyVaults.length} of ${allKeyVaults.length} Key Vaults`;
+    keyvaultList.appendChild(countDiv);
+    
     keyVaults.forEach(kv => {
         const kvElement = document.createElement('div');
         kvElement.className = 'keyvault-item';
-        kvElement.textContent = kv.name + (kv.location ? ` (${kv.location})` : '');
+        
+        // Show loading status for loaded vaults
+        const loadingIndicator = loadedVaults.has(kv.name) ? ' ✓' : '';
+        kvElement.textContent = kv.name + (kv.location ? ` (${kv.location})` : '') + loadingIndicator;
         kvElement.dataset.keyvaultName = kv.name;
         kvElement.addEventListener('click', () => selectKeyVault(kv));
         keyvaultList.appendChild(kvElement);
@@ -178,9 +214,13 @@ async function selectKeyVault(keyVault) {
     document.querySelectorAll('.keyvault-item').forEach(item => item.classList.remove('active'));
     document.querySelector(`[data-keyvault-name="${keyVault.name}"]`).classList.add('active');
     currentKeyVault = keyVault;
+    currentPage = 1; // Reset pagination when selecting a new key vault
     globalSearchInput.value = '';
     
-    // Load content based on current tab
+    // Mark vault as loaded
+    loadedVaults.add(keyVault.name);
+    
+    // Load content based on current tab (lazy loading)
     if (currentTab === 'secrets') {
         await loadSecretsForKeyVault(keyVault);
     } else if (currentTab === 'keys') {
@@ -188,6 +228,9 @@ async function selectKeyVault(keyVault) {
     }
     
     renderKeyVaultHeader(keyVault);
+    
+    // Update the key vault list to show loading status
+    renderKeyVaults(filteredKeyVaults);
 }
 
 function renderKeyVaultHeader(keyVault) {
@@ -337,17 +380,74 @@ async function handleGlobalSearch() {
     showLoading(currentTab === 'secrets' ? secretsContainer : keysContainer, 'Searching across all Key Vaults...');
     mainHeader.innerHTML = `<h2><i class="fas fa-search"></i> Global Search Results</h2>`;
     
-    // Fetch data for all vaults if not already loaded
-    for (const kv of allKeyVaults) {
-        if (!allSecretsByVault[kv.name]) {
-            await loadSecretsForKeyVault(kv);
-        }
-        if (!allKeysByVault[kv.name]) {
-            await loadKeysForKeyVault(kv);
+    // Search only in loaded vaults first (fast search)
+    const searchResults = [];
+    
+    // Search secrets in loaded vaults
+    for (const [vaultName, secrets] of Object.entries(allSecretsByVault)) {
+        for (const secret of secrets) {
+            if (fuzzySearch(secret.name.toLowerCase(), searchTerm)) {
+                searchResults.push({ ...secret, vaultName, type: 'secret' });
+            }
         }
     }
     
-    // Search all secrets and keys
+    // Search keys in loaded vaults
+    for (const [vaultName, keys] of Object.entries(allKeysByVault)) {
+        for (const key of keys) {
+            if (fuzzySearch(key.name.toLowerCase(), searchTerm)) {
+                searchResults.push({ ...key, vaultName, type: 'key' });
+            }
+        }
+    }
+    
+    // If no results in loaded vaults, offer to search all vaults
+    if (searchResults.length === 0) {
+        const unloadedVaults = allKeyVaults.filter(kv => !loadedVaults.has(kv.name));
+        if (unloadedVaults.length > 0) {
+            const container = currentTab === 'secrets' ? secretsContainer : keysContainer;
+            container.innerHTML = `
+                <div class="welcome-message">
+                    <i class="fas fa-search fa-3x"></i>
+                    <h2>No results in loaded Key Vaults</h2>
+                    <p>No secrets or keys matching "${searchTerm}" were found in the currently loaded Key Vaults.</p>
+                    <p>${unloadedVaults.length} Key Vaults are not yet loaded. Would you like to search all Key Vaults?</p>
+                    <button class="btn btn-primary" onclick="searchAllVaults('${searchTerm}')">
+                        <i class="fas fa-search"></i> Search All Key Vaults
+                    </button>
+                </div>
+            `;
+            return;
+        }
+    }
+    
+    renderGlobalSearchResults(searchResults, searchTerm);
+}
+
+// Function to search all vaults (called from UI)
+async function searchAllVaults(searchTerm) {
+    showLoading(currentTab === 'secrets' ? secretsContainer : keysContainer, 'Loading and searching all Key Vaults...');
+    
+    // Load data for all vaults
+    for (const kv of allKeyVaults) {
+        if (!loadedVaults.has(kv.name)) {
+            try {
+                if (currentTab === 'secrets') {
+                    await loadSecretsForKeyVault(kv);
+                } else {
+                    await loadKeysForKeyVault(kv);
+                }
+                loadedVaults.add(kv.name);
+            } catch (error) {
+                console.warn(`Failed to load data for vault ${kv.name}:`, error);
+            }
+        }
+    }
+    
+    // Update key vault list to show loading status
+    renderKeyVaults(filteredKeyVaults);
+    
+    // Now search all loaded data
     const searchResults = [];
     
     // Search secrets
@@ -436,7 +536,36 @@ function renderSecrets(secrets) {
         `;
         return;
     }
-    secrets.forEach(secret => {
+    
+    // Add count and pagination info
+    const totalPages = Math.ceil(secrets.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const pageSecrets = secrets.slice(startIndex, endIndex);
+    
+    // Add header with count and pagination
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'content-header';
+    headerDiv.innerHTML = `
+        <div class="content-info">
+            <span>Showing ${startIndex + 1}-${Math.min(endIndex, secrets.length)} of ${secrets.length} secrets</span>
+        </div>
+        ${totalPages > 1 ? `
+        <div class="pagination">
+            <button class="btn btn-secondary" onclick="changePage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>
+                <i class="fas fa-chevron-left"></i> Previous
+            </button>
+            <span class="page-info">Page ${currentPage} of ${totalPages}</span>
+            <button class="btn btn-secondary" onclick="changePage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>
+                Next <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+        ` : ''}
+    `;
+    secretsContainer.appendChild(headerDiv);
+    
+    // Render secrets for current page
+    pageSecrets.forEach(secret => {
         const secretCard = createSecretCard(secret);
         secretsContainer.appendChild(secretCard);
     });
@@ -454,10 +583,59 @@ function renderKeys(keys) {
         `;
         return;
     }
-    keys.forEach(key => {
+    
+    // Add count and pagination info
+    const totalPages = Math.ceil(keys.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const pageKeys = keys.slice(startIndex, endIndex);
+    
+    // Add header with count and pagination
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'content-header';
+    headerDiv.innerHTML = `
+        <div class="content-info">
+            <span>Showing ${startIndex + 1}-${Math.min(endIndex, keys.length)} of ${keys.length} keys</span>
+        </div>
+        ${totalPages > 1 ? `
+        <div class="pagination">
+            <button class="btn btn-secondary" onclick="changePage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>
+                <i class="fas fa-chevron-left"></i> Previous
+            </button>
+            <span class="page-info">Page ${currentPage} of ${totalPages}</span>
+            <button class="btn btn-secondary" onclick="changePage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>
+                Next <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+        ` : ''}
+    `;
+    keysContainer.appendChild(headerDiv);
+    
+    // Render keys for current page
+    pageKeys.forEach(key => {
         const keyCard = createKeyCard(key);
         keysContainer.appendChild(keyCard);
     });
+}
+
+// Pagination function
+function changePage(newPage) {
+    if (newPage < 1) return;
+    
+    const currentData = currentTab === 'secrets' 
+        ? (allSecretsByVault[currentKeyVault?.name] || [])
+        : (allKeysByVault[currentKeyVault?.name] || []);
+    
+    const totalPages = Math.ceil(currentData.length / itemsPerPage);
+    if (newPage > totalPages) return;
+    
+    currentPage = newPage;
+    
+    if (currentTab === 'secrets') {
+        renderSecrets(currentData);
+    } else {
+        renderKeys(currentData);
+    }
 }
 
 function showWelcomeMessage() {
