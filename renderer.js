@@ -50,30 +50,60 @@ async function loadAllKeyVaults() {
     allSecretsByVault = {};
     allKeysByVault = {};
     try {
+        console.log('Starting to load Key Vaults...');
         const credential = new DefaultAzureCredential();
+        console.log('Credential created successfully');
+        
         const subscriptionClient = new SubscriptionClient(credential);
+        console.log('Subscription client created');
+        
         const subscriptions = [];
+        console.log('Fetching subscriptions...');
         for await (const sub of subscriptionClient.subscriptions.list()) {
+            console.log('Found subscription:', sub.displayName, sub.subscriptionId);
             subscriptions.push(sub);
         }
+        console.log('Total subscriptions found:', subscriptions.length);
+        
+        if (subscriptions.length === 0) {
+            showError(keyvaultList, 'No subscriptions found. Please check your Azure account and permissions.');
+            return;
+        }
+        
         // For each subscription, get Key Vaults
         for (const sub of subscriptions) {
-            const kvClient = new KeyVaultManagementClient(credential, sub.subscriptionId);
-            for await (const vault of kvClient.vaults.list()) {
-                allKeyVaults.push({
-                    id: vault.id,
-                    name: vault.name,
-                    location: vault.location,
-                    resourceGroup: vault.resourceGroup,
-                    subscriptionId: sub.subscriptionId,
-                    properties: vault.properties
-                });
+            console.log('Fetching Key Vaults for subscription:', sub.displayName);
+            try {
+                const kvClient = new KeyVaultManagementClient(credential, sub.subscriptionId);
+                for await (const vault of kvClient.vaults.list()) {
+                    console.log('Found Key Vault:', vault.name, 'in', vault.location);
+                    allKeyVaults.push({
+                        id: vault.id,
+                        name: vault.name,
+                        location: vault.location,
+                        resourceGroup: vault.resourceGroup,
+                        subscriptionId: sub.subscriptionId,
+                        properties: vault.properties
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching Key Vaults for subscription', sub.displayName, ':', error);
+                // Continue with other subscriptions
             }
         }
+        
+        console.log('Total Key Vaults found:', allKeyVaults.length);
         renderKeyVaults(allKeyVaults);
+        
     } catch (error) {
         console.error('Error loading Key Vaults:', error);
-        showError(keyvaultList, 'Failed to load Key Vaults. Please check your Azure credentials and permissions.');
+        showError(keyvaultList, `Failed to load Key Vaults: ${error.message}. Please check your Azure credentials and permissions.`);
+        
+        // Show some helpful debugging info
+        console.log('Debug info:');
+        console.log('- Make sure you are logged in with: az login');
+        console.log('- Check if you have access to any subscriptions: az account list');
+        console.log('- Check if you have Key Vaults: az keyvault list');
     }
 }
 
@@ -115,13 +145,21 @@ function renderKeyVaultHeader(keyVault) {
 async function loadSecretsForKeyVault(keyVault) {
     showLoading(secretsContainer, 'Loading secrets...');
     try {
+        console.log('Loading secrets for Key Vault:', keyVault.name);
         const credential = new DefaultAzureCredential();
         const vaultUrl = `https://${keyVault.name}.vault.azure.net/`;
+        console.log('Key Vault URL:', vaultUrl);
+        
         const secretClient = new SecretClient(vaultUrl, credential);
+        console.log('Secret client created');
+        
         const secrets = [];
+        console.log('Listing secret properties...');
         for await (const secretProp of secretClient.listPropertiesOfSecrets()) {
+            console.log('Found secret property:', secretProp.name);
             try {
                 const secret = await secretClient.getSecret(secretProp.name);
+                console.log('Retrieved secret:', secret.name);
                 secrets.push({
                     name: secret.name,
                     value: secret.value,
@@ -132,14 +170,16 @@ async function loadSecretsForKeyVault(keyVault) {
                     enabled: secret.properties.enabled
                 });
             } catch (error) {
+                console.warn(`Failed to get secret ${secretProp.name}:`, error);
                 // skip secrets we can't fetch
             }
         }
+        console.log('Total secrets found:', secrets.length);
         allSecretsByVault[keyVault.name] = secrets;
         renderSecrets(secrets);
     } catch (error) {
-        console.error('Error loading secrets:', error);
-        showError(secretsContainer, 'Failed to load secrets.');
+        console.error('Error loading secrets for', keyVault.name, ':', error);
+        showError(secretsContainer, `Failed to load secrets: ${error.message}. Please check your Key Vault access policies.`);
     }
 }
 
