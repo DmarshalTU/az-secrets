@@ -713,19 +713,42 @@ body {
 .secret-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 12px;
+    gap: 12px;
 }
 
 .secret-name {
-    font-size: 16px;
-    font-weight: 600;
-    color: #ffffff;
+    flex: 1;
+    margin: 0;
+    word-break: break-all;
+    line-height: 1.3;
 }
 
 .secret-actions {
     display: flex;
-    gap: 8px;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.secret-actions .btn-sm {
+    padding: 4px 6px;
+    font-size: 10px;
+    min-width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.secret-actions .btn-warning {
+    background: #ffc107;
+    color: #212529;
+}
+
+.secret-actions .btn-warning:hover {
+    background: #e0a800;
+    color: #212529;
 }
 
 .secret-info {
@@ -765,6 +788,7 @@ body {
     word-break: break-all;
     position: relative;
     min-height: 40px;
+    margin-top: 12px;
 }
 
 .secret-value.hidden {
@@ -784,6 +808,9 @@ body {
     color: #ccc;
     font-size: 12px;
     transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .toggle-password:hover {
@@ -832,6 +859,7 @@ body {
     max-height: 80vh;
     overflow-y: auto;
     animation: modalSlideIn 0.3s ease;
+    border: 1px solid #333;
 }
 
 @keyframes modalSlideIn {
@@ -1098,19 +1126,32 @@ body {
 .key-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 12px;
+    gap: 12px;
 }
 
 .key-name {
-    font-size: 16px;
-    font-weight: 600;
-    color: #ffffff;
+    flex: 1;
+    margin: 0;
+    word-break: break-all;
+    line-height: 1.3;
 }
 
 .key-actions {
     display: flex;
-    gap: 8px;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.key-actions .btn-sm {
+    padding: 4px 6px;
+    font-size: 10px;
+    min-width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .key-info {
@@ -1520,4 +1561,33 @@ body {
     .activity-log-content {
         max-height: 150px;
     }
+}
+
+/* Enhanced Form Styles */
+.form-group input[readonly] {
+    background: #2a2a2a;
+    color: #999;
+    cursor: not-allowed;
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 80px;
+    font-family: 'Courier New', monospace;
+}
+
+/* Improved Button Spacing */
+.secret-header, .key-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    gap: 12px;
+}
+
+.secret-name, .key-name {
+    flex: 1;
+    margin: 0;
+    word-break: break-all;
+    line-height: 1.3;
 } 

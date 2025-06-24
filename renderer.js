@@ -196,9 +196,10 @@ function setupEventListeners() {
     
     clearGlobalSearchBtn.addEventListener('click', clearGlobalSearch);
     
-    // Fixed Key Vault search - ensure the input exists
+    // Fixed Key Vault search - ensure the input exists and add proper event listener
     if (keyvaultSearchInput) {
         keyvaultSearchInput.addEventListener('input', handleKeyVaultSearch);
+        addLogEntry('Key Vault search input found and configured', 'success');
     } else {
         console.error('Key Vault search input not found');
         addLogEntry('Error: Key Vault search input not found', 'error');
@@ -497,9 +498,10 @@ async function loadKeysForVault(vaultUrl, credential, vaultName) {
     return keys;
 }
 
-// Key Vault search functionality with pagination and improved display
+// Fixed Key Vault search functionality
 function handleKeyVaultSearch() {
     const searchTerm = keyvaultSearchInput.value.toLowerCase().trim();
+    console.log('Key Vault search term:', searchTerm);
     
     if (!searchTerm) {
         filteredKeyVaults = [...allKeyVaults];
@@ -1335,33 +1337,39 @@ function convertToText(data, type) {
 
 // Utility functions
 function copyToClipboard(text) {
+    if (!text) {
+        showNotification('Nothing to copy', 'warning');
+        return;
+    }
+    
     navigator.clipboard.writeText(text).then(() => {
-        const button = event.target.closest('button');
-        const originalText = button.innerHTML;
-        button.innerHTML = '<i class="fas fa-check"></i> Copied!';
-        setTimeout(() => {
-            button.innerHTML = originalText;
-        }, 2000);
         showNotification('Copied to clipboard', 'success');
+        addLogEntry(`Copied to clipboard: ${text.substring(0, 20)}${text.length > 20 ? '...' : ''}`, 'info');
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+        showNotification('Failed to copy to clipboard', 'error');
     });
 }
 
+// Fixed secret reveal functionality
 function togglePasswordVisibility(secretName) {
-    const secretValue = document.getElementById(`secret-value-${secretName}`);
-    const icon = secretValue.querySelector('.toggle-password i');
+    const secretElement = document.getElementById(`secret-${secretName.replace(/[^a-zA-Z0-9]/g, '-')}`);
+    const toggleButton = secretElement.querySelector('.toggle-password');
     
-    if (secretValue.classList.contains('hidden')) {
-        secretValue.classList.remove('hidden');
-        icon.className = 'fas fa-eye-slash';
+    if (secretElement.classList.contains('hidden')) {
+        secretElement.classList.remove('hidden');
+        toggleButton.innerHTML = '<i class="fas fa-eye-slash"></i> Hide';
+        addLogEntry(`Revealed secret: ${secretName}`, 'info');
     } else {
-        secretValue.classList.add('hidden');
-        icon.className = 'fas fa-eye';
+        secretElement.classList.add('hidden');
+        toggleButton.innerHTML = '<i class="fas fa-eye"></i> Show';
+        addLogEntry(`Hidden secret: ${secretName}`, 'info');
     }
 }
 
 function deleteSecret(secretName) {
     if (!currentKeyVault) return;
-    if (confirm(`Are you sure you want to delete the secret "${secretName}"?`)) {
+    if (confirm(`Are you sure you want to delete the secret "${secretName}"? This action cannot be undone.`)) {
         const credential = new DefaultAzureCredential();
         const vaultUrl = `https://${currentKeyVault.name}.vault.azure.net/`;
         const secretClient = new SecretClient(vaultUrl, credential);
@@ -1371,14 +1379,14 @@ function deleteSecret(secretName) {
             showNotification('Secret deleted successfully', 'success');
         }).catch(error => {
             console.error('Error deleting secret:', error);
-            showNotification('Failed to delete secret: ' + error.message, 'error');
+            showNotification(`Failed to delete secret: ${error.message}`, 'error');
         });
     }
 }
 
 function deleteKey(keyName) {
     if (!currentKeyVault) return;
-    if (confirm(`Are you sure you want to delete the key "${keyName}"?`)) {
+    if (confirm(`Are you sure you want to delete the key "${keyName}"? This action cannot be undone.`)) {
         const credential = new DefaultAzureCredential();
         const vaultUrl = `https://${currentKeyVault.name}.vault.azure.net/`;
         const keyClient = new KeyClient(vaultUrl, credential);
@@ -1388,7 +1396,7 @@ function deleteKey(keyName) {
             showNotification('Key deleted successfully', 'success');
         }).catch(error => {
             console.error('Error deleting key:', error);
-            showNotification('Failed to delete key: ' + error.message, 'error');
+            showNotification(`Failed to delete key: ${error.message}`, 'error');
         });
     }
 }
@@ -1409,6 +1417,9 @@ function createSecretCard(secret, searchTerm = '') {
                 </button>
                 <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('${secret.value || ''}')" title="Copy value">
                     <i class="fas fa-clipboard"></i>
+                </button>
+                <button class="btn btn-warning btn-sm" onclick="showEditSecretModal('${secret.name}', '${(secret.value || '').replace(/'/g, "\\'")}')" title="Edit secret">
+                    <i class="fas fa-edit"></i>
                 </button>
                 <button class="btn btn-danger btn-sm" onclick="deleteSecret('${secret.name}')" title="Delete secret">
                     <i class="fas fa-trash"></i>
@@ -1588,14 +1599,30 @@ function clearVaultSearch() {
 }
 
 // Make functions globally available for onclick handlers
-window.copyToClipboard = copyToClipboard;
+window.selectKeyVault = selectKeyVault;
+window.changeVaultPage = changeVaultPage;
+window.changePage = changePage;
 window.togglePasswordVisibility = togglePasswordVisibility;
+window.copyToClipboard = copyToClipboard;
 window.deleteSecret = deleteSecret;
 window.deleteKey = deleteKey;
+window.showAddSecretModal = showAddSecretModal;
+window.hideAddSecretModal = hideAddSecretModal;
+window.showAddKeyModal = showAddKeyModal;
+window.hideAddKeyModal = hideAddKeyModal;
+window.showExportModal = showExportModal;
+window.hideExportModal = hideExportModal;
+window.showBulkOperations = showBulkOperations;
 window.bulkExport = bulkExport;
 window.bulkDisable = bulkDisable;
 window.bulkEnable = bulkEnable;
 window.bulkDelete = bulkDelete;
+window.clearActivityLog = clearActivityLog;
+window.showEditSecretModal = showEditSecretModal;
+window.hideEditSecretModal = hideEditSecretModal;
+window.updateSecret = updateSecret;
+window.searchAllVaults = searchAllVaults;
+window.clearVaultSearch = clearVaultSearch;
 
 function showBulkOperations() {
     if (!currentKeyVault) {
@@ -1671,4 +1698,94 @@ function addPerformanceIndicator() {
     
     // Update every 5 seconds
     setInterval(updatePerformanceMetrics, 5000);
+}
+
+// Add edit secret functionality
+function showEditSecretModal(secretName, secretValue) {
+    const modal = document.createElement('div');
+    modal.className = 'modal show';
+    modal.id = 'editSecretModal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Secret: ${secretName}</h3>
+                <button class="close-btn" onclick="hideEditSecretModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="editSecretName">Secret Name:</label>
+                    <input type="text" id="editSecretName" value="${secretName}" readonly>
+                </div>
+                <div class="form-group">
+                    <label for="editSecretValue">Secret Value:</label>
+                    <textarea id="editSecretValue" placeholder="Enter new secret value" rows="4">${secretValue || ''}</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="editSecretDescription">Description (optional):</label>
+                    <input type="text" id="editSecretDescription" placeholder="Enter description">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideEditSecretModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="updateSecret('${secretName}')">Update Secret</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Close modal when clicking outside
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) hideEditSecretModal();
+    });
+}
+
+function hideEditSecretModal() {
+    const modal = document.getElementById('editSecretModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+async function updateSecret(secretName) {
+    const newValue = document.getElementById('editSecretValue').value;
+    const description = document.getElementById('editSecretDescription').value;
+    
+    if (!newValue.trim()) {
+        showNotification('Secret value cannot be empty', 'error');
+        return;
+    }
+    
+    try {
+        addLogEntry(`Updating secret: ${secretName}`, 'info');
+        
+        const credential = new DefaultAzureCredential();
+        const vaultUrl = `https://${currentKeyVault.name}.vault.azure.net/`;
+        const secretClient = new SecretClient(vaultUrl, credential);
+        
+        // Create a new version of the secret
+        await secretClient.setSecret(secretName, newValue);
+        
+        // Update the local cache
+        const secrets = allSecretsByVault.get(currentKeyVault.name) || [];
+        const secretIndex = secrets.findIndex(s => s.name === secretName);
+        
+        if (secretIndex !== -1) {
+            secrets[secretIndex].value = newValue;
+            secrets[secretIndex].updated = new Date();
+            allSecretsByVault.set(currentKeyVault.name, secrets);
+        }
+        
+        hideEditSecretModal();
+        showNotification(`Secret "${secretName}" updated successfully`, 'success');
+        addLogEntry(`Successfully updated secret: ${secretName}`, 'success');
+        
+        // Refresh the display
+        renderSecrets(secrets);
+        
+    } catch (error) {
+        console.error('Error updating secret:', error);
+        showNotification(`Failed to update secret: ${error.message}`, 'error');
+        addLogEntry(`Failed to update secret ${secretName}: ${error.message}`, 'error');
+    }
 } 
