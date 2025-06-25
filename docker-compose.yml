@@ -1,0 +1,65 @@
+services:
+  az-secrets-index:
+    build:
+      context: ./index-service
+      dockerfile: Dockerfile
+    container_name: az-secrets-index
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - AZURE_CONFIG_DIR=/home/nodejs/.azure
+      - HOME=/home/nodejs
+    restart: "no"  # Don't restart automatically
+    # Security: run as non-root user (Ubuntu nodejs user)
+    user: "999:999"
+    # Memory limits for large datasets
+    mem_limit: 2g
+    mem_reservation: 512m
+    # CPU limits
+    cpu_count: 2
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Network isolation
+    networks:
+      - az-secrets-network
+    # Volumes for Azure CLI credentials and temporary data
+    volumes:
+      - ~/.azure:/home/nodejs/.azure:rw
+      - /tmp/az-secrets:/tmp/az-secrets:rw
+    # Security: read-only root filesystem (but allow Azure credentials)
+    read_only: false
+    # Security: no privileged access
+    privileged: false
+    # Security: drop capabilities
+    cap_drop:
+      - ALL
+    # Security: add only necessary capabilities
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    # Security: security options
+    security_opt:
+      - no-new-privileges:true
+    # Ephemeral settings - auto-remove container when stopped
+    labels:
+      - "com.az-secrets.ephemeral=true"
+      - "com.az-secrets.cleanup=true"
+    # Auto-remove container when stopped
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+      - /var/tmp:noexec,nosuid,size=100m
+
+networks:
+  az-secrets-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 

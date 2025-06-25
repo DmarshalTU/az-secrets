@@ -14,6 +14,12 @@
         <button class="btn btn-secondary" id="clearGlobalSearch">
             <i class="fas fa-times"></i>
         </button>
+        <button class="btn btn-primary" id="startIndexing" title="Start indexing all Key Vaults">
+            <i class="fas fa-database"></i> Index
+        </button>
+        <div id="securityIndicator" class="security-indicator" title="Checking security...">
+            <i class="fas fa-shield-alt"></i>
+        </div>
     </div>
     <div class="app-container">
         <!-- Sidebar -->
@@ -48,6 +54,9 @@
                     <button class="tab-btn" data-tab="keys">
                         <i class="fas fa-lock"></i> Keys
                     </button>
+                    <button class="tab-btn" data-tab="certificates">
+                        <i class="fas fa-certificate"></i> Certificates
+                    </button>
                 </div>
                 
                 <!-- Tab Content -->
@@ -67,6 +76,15 @@
                                 <i class="fas fa-lock fa-3x"></i>
                                 <h2>Key Management</h2>
                                 <p>Select a Key Vault to view and manage your cryptographic keys</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tab-pane" id="certificatesTab">
+                        <div class="certificates-container" id="certificatesContainer">
+                            <div class="welcome-message">
+                                <i class="fas fa-certificate fa-3x"></i>
+                                <h2>Certificate Management</h2>
+                                <p>Select a Key Vault to view and manage your certificates</p>
                             </div>
                         </div>
                     </div>
@@ -176,6 +194,89 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="cancelExport">Cancel</button>
                 <button class="btn btn-primary" id="exportData">Export</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Migration Modal -->
+    <div id="migrationModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-exchange-alt"></i> Migrate Items</h3>
+                <button class="close-btn" onclick="hideMigrationModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="migration-info">
+                    <p><strong>Selected Items:</strong> <span id="selectedSecretsCount">0</span> secrets, <span id="selectedKeysCount">0</span> keys, <span id="selectedCertificatesCount">0</span> certificates</p>
+                    <p><strong>Source Vault:</strong> <span id="sourceVaultName"></span></p>
+                </div>
+                <div class="form-group">
+                    <label for="targetVaultSelect">Target Key Vault:</label>
+                    <select id="targetVaultSelect" required>
+                        <option value="">Select target Key Vault...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="migrationOptions">Migration Options:</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="overwriteExisting" checked>
+                            <span class="checkmark"></span>
+                            Overwrite existing items with same name
+                        </label>
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="preserveMetadata" checked>
+                            <span class="checkmark"></span>
+                            Preserve creation dates and metadata
+                        </label>
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="validateBeforeMigrate" checked>
+                            <span class="checkmark"></span>
+                            Validate target vault access before migration
+                        </label>
+                    </div>
+                </div>
+                <div class="selected-secrets-list" id="selectedSecretsList">
+                    <!-- Selected secrets will be listed here -->
+                </div>
+                <div class="selected-keys-list" id="selectedKeysList">
+                    <!-- Selected keys will be listed here -->
+                </div>
+                <div class="selected-certificates-list" id="selectedCertificatesList">
+                    <!-- Selected certificates will be listed here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideMigrationModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="startMigration()" id="startMigrationBtn">
+                    <i class="fas fa-exchange-alt"></i> Start Migration
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Migration Progress Modal -->
+    <div id="migrationProgressModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-exchange-alt"></i> Migration Progress</h3>
+            </div>
+            <div class="modal-body">
+                <div class="migration-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="migrationProgressFill" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-text" id="migrationProgressText">Preparing migration...</div>
+                </div>
+                <div class="migration-log" id="migrationLog">
+                    <!-- Migration log entries will appear here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="cancelMigration()" id="cancelMigrationBtn">Cancel</button>
+                <button class="btn btn-primary" onclick="closeMigrationProgress()" id="closeMigrationBtn" style="display: none;">
+                    Close
+                </button>
             </div>
         </div>
     </div>

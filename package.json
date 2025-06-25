@@ -41,6 +41,7 @@
     "@azure/arm-keyvault": "^3.2.0",
     "@azure/arm-subscriptions": "^5.1.0",
     "@azure/identity": "^4.0.0",
+    "@azure/keyvault-certificates": "^4.10.0",
     "@azure/keyvault-keys": "^4.7.0",
     "@azure/keyvault-secrets": "^4.7.0",
     "electron-store": "^8.1.0"
@@ -76,11 +77,15 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64"]
+          "arch": [
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["arm64"]
+          "arch": [
+            "arm64"
+          ]
         }
       ],
       "hardenedRuntime": true,
@@ -91,11 +96,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "requestedExecutionLevel": "asInvoker"
@@ -105,11 +114,15 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "deb",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "category": "Development",
@@ -138,4 +151,4 @@
       "releaseType": "release"
     }
   }
-} 
+}
