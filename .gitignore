@@ -106,4 +106,4 @@ build/
 
 # Azure credentials (if stored locally)
 azure-credentials.json 
-index-service/
+# index-service/
