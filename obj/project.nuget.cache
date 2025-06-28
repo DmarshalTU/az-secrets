@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "dgSpecHash": "diOpWarU+ds=",
+  "success": true,
+  "projectFilePath": "/Users/denistu/Projects/kukie/KeyVaultTool/KeyVaultTool.csproj",
+  "expectedPackageFiles": [
+    "/Users/denistu/.nuget/packages/azure.core/1.46.2/azure.core.1.46.2.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/azure.identity/1.14.1/azure.identity.1.14.1.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/azure.security.keyvault.certificates/4.8.0/azure.security.keyvault.certificates.4.8.0.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/azure.security.keyvault.keys/4.8.0/azure.security.keyvault.keys.4.8.0.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/azure.security.keyvault.secrets/4.8.0/azure.security.keyvault.secrets.4.8.0.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/microsoft.bcl.asyncinterfaces/8.0.0/microsoft.bcl.asyncinterfaces.8.0.0.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/microsoft.extensions.dependencyinjection.abstractions/8.0.2/microsoft.extensions.dependencyinjection.abstractions.8.0.2.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/microsoft.extensions.logging.abstractions/8.0.3/microsoft.extensions.logging.abstractions.8.0.3.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/microsoft.identity.client/4.71.1/microsoft.identity.client.4.71.1.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/microsoft.identity.client.extensions.msal/4.71.1/microsoft.identity.client.extensions.msal.4.71.1.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/microsoft.identitymodel.abstractions/6.35.0/microsoft.identitymodel.abstractions.6.35.0.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/spectre.console/0.50.0/spectre.console.0.50.0.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/system.clientmodel/1.4.2/system.clientmodel.1.4.2.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/system.diagnostics.diagnosticsource/6.0.1/system.diagnostics.diagnosticsource.6.0.1.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/system.memory/4.6.3/system.memory.4.6.3.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/system.memory.data/6.0.1/system.memory.data.6.0.1.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/system.runtime.compilerservices.unsafe/6.0.0/system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
+    "/Users/denistu/.nuget/packages/system.security.cryptography.protecteddata/9.0.6/system.security.cryptography.protecteddata.9.0.6.nupkg.sha512"
+  ],
+  "logs": []
+}
